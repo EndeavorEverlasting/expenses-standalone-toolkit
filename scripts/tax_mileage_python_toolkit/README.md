@@ -40,7 +40,32 @@ From repository root:
 ```bash
 python -m product.tax_mileage_toolkit.cli reconcile .\latest\CANDIDATE_2025_Tax_Mileage_Reconciliation_Toolkit_v3.xlsx .\scripts
 python -m product.tax_mileage_toolkit.cli audit .\latest\CANDIDATE_2025_Tax_Mileage_Reconciliation_Toolkit_v3.xlsx .\scripts
+python -m product.tax_mileage_toolkit.cli suggest-clusters .\latest\CANDIDATE_2025_Tax_Mileage_Reconciliation_Toolkit_v3.xlsx .\scripts
+python -m product.tax_mileage_toolkit.cli suggest-clusters .\latest\CANDIDATE_2025_Tax_Mileage_Reconciliation_Toolkit_v3.xlsx .\scripts --write
 ```
+
+### HTML reporting
+```bash
+python -m product.tax_mileage_toolkit.cli render-html .\scripts
+```
+
+### Full polished run (includes SysAdminSuite themed pages)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\tax_mileage_python_toolkit\Invoke-MileageHtmlRun.ps1 `
+  -WorkbookPath .\latest\CANDIDATE_2025_Tax_Mileage_Reconciliation_Toolkit_v3.xlsx `
+  -EngageDeferred `
+  -WriteSuggestions
+```
+
+### Launch GUI workbench
+```bash
+python -m product.tax_mileage_toolkit.cli serve-gui --host 127.0.0.1 --port 8787
+```
+
+Open `http://127.0.0.1:8787` and use:
+- run controls for `audit/reconcile/suggest`
+- suggestions table row selection
+- promotion dry-run before promotion write
 
 ## Run (Legacy wrappers in this folder)
 

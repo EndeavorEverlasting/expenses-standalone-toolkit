@@ -35,3 +35,4 @@ Standalone Toolkit Release foundation for mileage reconciliation and audit workf
 1. Add explicit schema validator with clear error codes.
 2. Add screenshot ingestion skeleton under standalone package.
 3. Add adapter layer for ASTAS plugin/extension execution path.
+4. Add conservative helper-column cluster suggestion automation with backup-first writes.

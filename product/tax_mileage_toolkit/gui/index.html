@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mileage GUI Workbench</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Mileage GUI Workbench</h1>
+    <div id="status"></div>
+  </header>
+
+  <section class="card">
+    <h2>Run Controls</h2>
+    <div class="row">
+      <input id="workbookPath" type="text" placeholder="Workbook path" />
+      <label><input id="engageDeferred" type="checkbox" /> Engage deferred</label>
+      <label><input id="writeSuggestions" type="checkbox" /> Write helper suggestions</label>
+      <button id="runBtn">Run Iteration</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Runs</h2>
+    <div class="row">
+      <select id="runSelect"></select>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+    <pre id="summary"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Suggestions</h2>
+    <div class="row">
+      <input id="suggestQuery" type="text" placeholder="Search suggestions..." />
+      <button id="loadSuggestionsBtn">Load</button>
+      <button id="dryPromoteBtn">Promote Dry-Run Selected</button>
+      <button id="promoteBtn">Promote Selected</button>
+    </div>
+    <div id="suggestionsTable"></div>
+  </section>
+
+  <section class="card">
+    <h2>Matches / Overlaps</h2>
+    <div class="row">
+      <button id="loadMatchesBtn">Load Matches</button>
+      <button id="loadOverlapsBtn">Load Overlaps</button>
+    </div>
+    <div id="genericTable"></div>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
