@@ -1,0 +1,33 @@
+# Private and sensitive raw data
+Google Maps Timelines/
+Shitty Google Docs/
+bank statements/
+screenshots/raw/
+incoming/raw/
+latest/*.xlsx
+latest/*.zip
+
+# Local outputs and generated artifacts
+scripts/*.json
+scripts/*.csv
+toolkit_outputs/
+outputs/
+reports/
+
+# Python environments and caches
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

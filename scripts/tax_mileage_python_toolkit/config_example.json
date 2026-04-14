@@ -1,0 +1,6 @@
+{
+  "strong_match_threshold_mi": 0.5,
+  "near_match_threshold_mi": 1.5,
+  "cluster_overlap_threshold_mi": 0.5,
+  "weekday_priority": true
+}
