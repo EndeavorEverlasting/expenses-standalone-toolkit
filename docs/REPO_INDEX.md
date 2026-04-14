@@ -23,3 +23,7 @@ This repository is organized to support a standalone mileage reconciliation prod
 
 Sensitive personal exports and bank statements are intentionally ignored by `.gitignore`.
 Only shareable code, docs, templates, and release metadata should be committed.
+
+For exact keep-vs-ignore guidance when syncing across machines, use:
+
+- `docs/CLOUD_RETENTION_POLICY.md`

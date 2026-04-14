@@ -10,6 +10,11 @@ latest/*.zip
 # Local outputs and generated artifacts
 scripts/*.json
 scripts/*.csv
+scripts/*.html
+scripts/runs/
+scripts/backups/
+scripts/*backup*.xlsx
+scripts/*test*.xlsx
 toolkit_outputs/
 outputs/
 reports/
