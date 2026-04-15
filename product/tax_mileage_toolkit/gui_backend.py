@@ -70,6 +70,80 @@ def create_app(workspace: Path) -> FastAPI:
         with path.open("r", encoding="utf-8", newline="") as f:
             return list(csv.DictReader(f))
 
+    def _legacy_actionable_feedback(audit: dict[str, Any]) -> list[dict[str, Any]]:
+        defaults = {
+            "clusters_missing_final_site_decision": {
+                "sheet": "Coord Reconcile Console",
+                "columns": ["M (final_site_decision)"],
+                "row_start": 6,
+                "practical_action": "Fill final_site_decision for unresolved clusters.",
+                "alignment_goal": "Finalize cluster decisions before promotion.",
+            },
+            "known_sites_not_user_confirmed": {
+                "sheet": "Known Site Rollup",
+                "columns": ["M (user_confirmed)"],
+                "row_start": 6,
+                "practical_action": "Confirm each known site and set user_confirmed.",
+                "alignment_goal": "Keep matching restricted to confirmed sites.",
+            },
+            "distance_matrix_active_rows_missing_standard_miles": {
+                "sheet": "Sites & Distance Matrix",
+                "columns": ["D (active_pair)", "K (standard_miles)"],
+                "row_start": 6,
+                "practical_action": "Enter standard_miles for active route pairs.",
+                "alignment_goal": "Ensure consistent baseline mileage values.",
+            },
+            "site_day_rows_missing_final_site_decision": {
+                "sheet": "Site-Day Draft",
+                "columns": ["S (final_site_decision)"],
+                "row_start": 5,
+                "practical_action": "Set final_site_decision for unresolved day rows.",
+                "alignment_goal": "Align day rows with finalized sites.",
+            },
+            "weekend_site_day_rows_pending_review": {
+                "sheet": "Site-Day Draft",
+                "columns": ["P (day_type)", "T (weekend_review_status)"],
+                "row_start": 5,
+                "practical_action": "Review weekend rows and update review status.",
+                "alignment_goal": "Separate deductible vs non-deductible weekend travel.",
+            },
+            "drafted_legs_missing_classification": {
+                "sheet": "Mileage Detail - Drafted",
+                "columns": ["B (leg_identifier)", "O (classification)"],
+                "row_start": 5,
+                "practical_action": "Classify each drafted leg.",
+                "alignment_goal": "Make totals and downstream filtering accurate.",
+            },
+            "toll_candidate_legs_missing_toll_decision": {
+                "sheet": "Mileage Detail - Drafted",
+                "columns": ["V (toll_candidate)", "W (toll_decision)"],
+                "row_start": 5,
+                "practical_action": "Record toll decisions for toll candidate legs.",
+                "alignment_goal": "Include only valid toll charges in totals.",
+            },
+        }
+        feedback = []
+        for key, template in defaults.items():
+            count = audit.get(key, 0)
+            if not isinstance(count, int):
+                continue
+            feedback.append(
+                {
+                    "metric_key": key,
+                    "count": count,
+                    "workbook_location": {
+                        "sheet": template["sheet"],
+                        "columns": template["columns"],
+                        "row_start": template["row_start"],
+                        "row_end": None,
+                    },
+                    "practical_action": template["practical_action"],
+                    "alignment_goal": template["alignment_goal"],
+                    "sample_rows": [],
+                }
+            )
+        return feedback
+
     @app.get("/")
     def root() -> FileResponse:
         return FileResponse(gui_dir / "index.html")
@@ -88,6 +162,9 @@ def create_app(workspace: Path) -> FastAPI:
         audit_path = run_dir / "audit_report.json"
         if audit_path.exists():
             audit = json.loads(audit_path.read_text(encoding="utf-8"))
+        actionable_feedback = audit.get("actionable_feedback")
+        if not isinstance(actionable_feedback, list):
+            actionable_feedback = _legacy_actionable_feedback(audit)
 
         suggestions = _read_csv(run_dir / "cluster_suggestion_report.csv")
         matches = _read_csv(run_dir / "cluster_match_report.csv")
@@ -98,6 +175,7 @@ def create_app(workspace: Path) -> FastAPI:
         return {
             "run_id": run_id,
             "audit": audit,
+            "actionable_feedback": actionable_feedback,
             "suggestions": {"total": len(suggestions), "suggested": suggested, "deferred": deferred, "skipped": skipped},
             "matches_rows": len(matches),
             "overlaps_rows": len(overlaps),

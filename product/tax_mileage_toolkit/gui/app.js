@@ -1,6 +1,7 @@
 const statusEl = document.getElementById("status");
 const runSelect = document.getElementById("runSelect");
 const summaryEl = document.getElementById("summary");
+const rawSummaryEl = document.getElementById("rawSummary");
 const suggestionsTable = document.getElementById("suggestionsTable");
 const genericTable = document.getElementById("genericTable");
 
@@ -51,7 +52,46 @@ async function refreshRuns() {
 
 async function loadSummary(runId) {
   const data = await getJson(`/api/runs/${runId}/summary`);
-  summaryEl.textContent = JSON.stringify(data, null, 2);
+  renderSummary(data);
+}
+
+function formatRows(rows) {
+  if (!rows || rows.length === 0) return "none sampled";
+  return rows.join(", ");
+}
+
+function renderSummary(data) {
+  const feedback = Array.isArray(data.actionable_feedback) ? data.actionable_feedback : [];
+  const visibleFeedback = feedback.filter(item => (item.count ?? 0) > 0);
+  const suggestions = data.suggestions || { total: 0, suggested: 0, deferred: 0, skipped: 0 };
+  const head = `
+    <div class="summary-head">
+      Run <strong>${data.run_id}</strong> |
+      Suggestions: total ${suggestions.total}, suggested ${suggestions.suggested}, deferred ${suggestions.deferred}, skipped ${suggestions.skipped}
+    </div>
+  `;
+  if (visibleFeedback.length === 0) {
+    summaryEl.innerHTML = `${head}<div class="feedback-item"><div class="feedback-title">No workbook alignment issues detected.</div></div>`;
+  } else {
+    const items = visibleFeedback.map(item => {
+      const loc = item.workbook_location || {};
+      const sheet = loc.sheet || "Unknown sheet";
+      const cols = Array.isArray(loc.columns) ? loc.columns.join(", ") : "";
+      const rowStart = loc.row_start ?? "?";
+      const rowEnd = loc.row_end ?? "?";
+      return `
+        <div class="feedback-item">
+          <div class="feedback-title">${item.metric_key} (${item.count})</div>
+          <div class="feedback-line"><strong>Where:</strong> ${sheet}, rows ${rowStart}-${rowEnd}, columns ${cols}</div>
+          <div class="feedback-line"><strong>Do this:</strong> ${item.practical_action || ""}</div>
+          <div class="feedback-line"><strong>Goal:</strong> ${item.alignment_goal || ""}</div>
+          <div class="feedback-line"><strong>Sample rows:</strong> ${formatRows(item.sample_rows)}</div>
+        </div>
+      `;
+    }).join("");
+    summaryEl.innerHTML = `${head}<div class="feedback-list">${items}</div>`;
+  }
+  rawSummaryEl.textContent = JSON.stringify(data, null, 2);
 }
 
 async function loadTable(name, query = "") {

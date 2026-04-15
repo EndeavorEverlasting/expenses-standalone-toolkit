@@ -54,3 +54,34 @@ pre {
   padding: 10px;
   overflow: auto;
 }
+.summary-head {
+  margin-top: 10px;
+  color: #9aa4b2;
+  font-size: 13px;
+}
+.feedback-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+.feedback-item {
+  border: 1px solid #2d3748;
+  border-radius: 8px;
+  background: #0b0f15;
+  padding: 10px;
+}
+.feedback-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.feedback-line {
+  margin: 3px 0;
+  font-size: 13px;
+}
+.raw-summary {
+  margin-top: 10px;
+}
+.raw-summary > summary {
+  cursor: pointer;
+  color: #7cc7ff;
+}

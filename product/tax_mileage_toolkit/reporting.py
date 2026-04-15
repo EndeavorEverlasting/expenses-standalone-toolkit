@@ -61,6 +61,30 @@ def _table(rows: list[dict[str, Any]]) -> str:
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
 
 
+def _actionable_feedback_html(feedback: list[dict[str, Any]]) -> str:
+    if not feedback:
+        return "<div class='card'>No actionable feedback in this run.</div>"
+    blocks = []
+    for item in feedback:
+        location = item.get("workbook_location", {}) or {}
+        sheet = location.get("sheet", "Unknown sheet")
+        columns = ", ".join(location.get("columns", [])) if isinstance(location.get("columns"), list) else ""
+        row_start = location.get("row_start", "?")
+        row_end = location.get("row_end", "?")
+        sample_rows = item.get("sample_rows", [])
+        sample_text = ", ".join(str(r) for r in sample_rows[:5]) if sample_rows else "none sampled"
+        blocks.append(
+            "<div class='card'>"
+            f"<h3>{item.get('metric_key', 'issue')} ({item.get('count', 0)})</h3>"
+            f"<p><strong>Where:</strong> {sheet}, rows {row_start}-{row_end}, columns {columns}</p>"
+            f"<p><strong>Do this:</strong> {item.get('practical_action', '')}</p>"
+            f"<p><strong>Goal:</strong> {item.get('alignment_goal', '')}</p>"
+            f"<p><strong>Sample rows:</strong> {sample_text}</p>"
+            "</div>"
+        )
+    return "".join(blocks)
+
+
 def render_html_reports(run_dir: Path) -> dict[str, str]:
     run_dir = run_dir.expanduser().resolve()
     audit = _read_json(run_dir / "audit_report.json")
@@ -70,12 +94,18 @@ def render_html_reports(run_dir: Path) -> dict[str, str]:
 
     paths: dict[str, str] = {}
 
-    audit_rows = [{"metric": k, "value": v} for k, v in audit.items()]
+    actionable_feedback = audit.get("actionable_feedback", [])
+    if not isinstance(actionable_feedback, list):
+        actionable_feedback = []
+    audit_rows = [{"metric": k, "value": v} for k, v in audit.items() if k != "actionable_feedback"]
+    actionable_body = _actionable_feedback_html([item for item in actionable_feedback if item.get("count", 0) > 0])
     audit_html = _html_page(
         "Mileage Audit Summary",
         str(run_dir),
         [f"Metrics: {len(audit_rows)}"],
-        _table(audit_rows),
+        _table(audit_rows)
+        + "<div class='card'><h2>Actionable Workbook Feedback</h2></div>"
+        + actionable_body,
     )
     audit_path = run_dir / "audit.html"
     audit_path.write_text(audit_html, encoding="utf-8")
