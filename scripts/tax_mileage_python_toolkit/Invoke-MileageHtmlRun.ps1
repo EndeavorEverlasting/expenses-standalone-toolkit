@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$WorkbookPath,
   [string]$RunsRoot = ".\scripts\runs",
+  [string]$SysAdminWrapper = "",
   [switch]$EngageDeferred,
   [switch]$WriteSuggestions
 )
@@ -8,7 +9,14 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$sysAdminWrapper = "C:\Users\Cheex\Desktop\dev\SysAdminSuite\tools\ConvertTo-SuiteHtml.ps1"
+$repoRelativeWrapper = Join-Path $repoRoot "tools\ConvertTo-SuiteHtml.ps1"
+$sysAdminWrapper = if ($SysAdminWrapper) {
+  $SysAdminWrapper
+} elseif ($env:SYSADMIN_WRAPPER) {
+  $env:SYSADMIN_WRAPPER
+} else {
+  $repoRelativeWrapper
+}
 if (-not (Test-Path $sysAdminWrapper)) {
   throw "SysAdminSuite HTML wrapper not found at $sysAdminWrapper"
 }

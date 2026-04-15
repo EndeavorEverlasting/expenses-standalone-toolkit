@@ -9,6 +9,15 @@ function setStatus(text) {
   statusEl.textContent = text;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 async function getJson(url, opts = {}) {
   const res = await fetch(url, opts);
   if (!res.ok) {
@@ -24,10 +33,10 @@ function renderTable(target, rows, withSelect = false) {
     return;
   }
   const headers = Object.keys(rows[0]);
-  const head = `<tr>${withSelect ? "<th>pick</th>" : ""}${headers.map(h => `<th>${h}</th>`).join("")}</tr>`;
+  const head = `<tr>${withSelect ? "<th>pick</th>" : ""}${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
   const body = rows.map(r => {
-    const pickCell = withSelect ? `<td><input type="checkbox" data-row="${r.row_idx || ""}"></td>` : "";
-    return `<tr>${pickCell}${headers.map(h => `<td>${r[h] ?? ""}</td>`).join("")}</tr>`;
+    const pickCell = withSelect ? `<td><input type="checkbox" data-row="${escapeHtml(r.row_idx || "")}"></td>` : "";
+    return `<tr>${pickCell}${headers.map(h => `<td>${escapeHtml(r[h] ?? "")}</td>`).join("")}</tr>`;
   }).join("");
   target.innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
@@ -57,17 +66,22 @@ async function loadSummary(runId) {
 
 function formatRows(rows) {
   if (!rows || rows.length === 0) return "none sampled";
-  return rows.join(", ");
+  return rows.map(r => escapeHtml(r)).join(", ");
 }
 
 function renderSummary(data) {
   const feedback = Array.isArray(data.actionable_feedback) ? data.actionable_feedback : [];
   const visibleFeedback = feedback.filter(item => (item.count ?? 0) > 0);
   const suggestions = data.suggestions || { total: 0, suggested: 0, deferred: 0, skipped: 0 };
+  const safeRunId = escapeHtml(data.run_id);
+  const safeTotal = escapeHtml(suggestions.total);
+  const safeSuggested = escapeHtml(suggestions.suggested);
+  const safeDeferred = escapeHtml(suggestions.deferred);
+  const safeSkipped = escapeHtml(suggestions.skipped);
   const head = `
     <div class="summary-head">
-      Run <strong>${data.run_id}</strong> |
-      Suggestions: total ${suggestions.total}, suggested ${suggestions.suggested}, deferred ${suggestions.deferred}, skipped ${suggestions.skipped}
+      Run <strong>${safeRunId}</strong> |
+      Suggestions: total ${safeTotal}, suggested ${safeSuggested}, deferred ${safeDeferred}, skipped ${safeSkipped}
     </div>
   `;
   if (visibleFeedback.length === 0) {
@@ -75,16 +89,20 @@ function renderSummary(data) {
   } else {
     const items = visibleFeedback.map(item => {
       const loc = item.workbook_location || {};
-      const sheet = loc.sheet || "Unknown sheet";
-      const cols = Array.isArray(loc.columns) ? loc.columns.join(", ") : "";
-      const rowStart = loc.row_start ?? "?";
-      const rowEnd = loc.row_end ?? "?";
+      const sheet = escapeHtml(loc.sheet || "Unknown sheet");
+      const cols = escapeHtml(Array.isArray(loc.columns) ? loc.columns.join(", ") : "");
+      const rowStart = escapeHtml(loc.row_start ?? "?");
+      const rowEnd = escapeHtml(loc.row_end ?? "?");
+      const metricKey = escapeHtml(item.metric_key);
+      const metricCount = escapeHtml(item.count);
+      const practicalAction = escapeHtml(item.practical_action || "");
+      const alignmentGoal = escapeHtml(item.alignment_goal || "");
       return `
         <div class="feedback-item">
-          <div class="feedback-title">${item.metric_key} (${item.count})</div>
+          <div class="feedback-title">${metricKey} (${metricCount})</div>
           <div class="feedback-line"><strong>Where:</strong> ${sheet}, rows ${rowStart}-${rowEnd}, columns ${cols}</div>
-          <div class="feedback-line"><strong>Do this:</strong> ${item.practical_action || ""}</div>
-          <div class="feedback-line"><strong>Goal:</strong> ${item.alignment_goal || ""}</div>
+          <div class="feedback-line"><strong>Do this:</strong> ${practicalAction}</div>
+          <div class="feedback-line"><strong>Goal:</strong> ${alignmentGoal}</div>
           <div class="feedback-line"><strong>Sample rows:</strong> ${formatRows(item.sample_rows)}</div>
         </div>
       `;
@@ -115,15 +133,22 @@ async function runIteration() {
     write_suggestions: document.getElementById("writeSuggestions").checked
   };
   setStatus("Running iteration...");
-  const res = await getJson("/api/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  setStatus(`Run complete: ${res.run_id}`);
-  await refreshRuns();
-  runSelect.value = res.run_id;
-  await loadSummary(res.run_id);
+  try {
+    const res = await getJson("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    setStatus(`Run complete: ${res.run_id}`);
+    await refreshRuns();
+    runSelect.value = res.run_id;
+    await loadSummary(res.run_id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    setStatus(`Run failed: ${message}`);
+    console.error("runIteration failed", err);
+    alert(`Run failed: ${message}`);
+  }
 }
 
 function selectedRowIndices() {
@@ -143,13 +168,20 @@ async function promote(dryRun) {
     return alert("Need run, workbook path, and selected suggestion rows.");
   }
   const payload = { workbook_path: workbookPath, run_id: runId, row_indices: rowIndices, dry_run: dryRun };
-  const res = await getJson("/api/promote", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  alert(JSON.stringify(res, null, 2));
-  setStatus(dryRun ? "Promotion dry-run complete." : "Promotion write complete.");
+  try {
+    const res = await getJson("/api/promote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    alert(JSON.stringify(res, null, 2));
+    setStatus(dryRun ? "Promotion dry-run complete." : "Promotion write complete.");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    setStatus(`Promotion failed: ${message}`);
+    console.error("promote failed", err);
+    alert(`Promotion failed: ${message}`);
+  }
 }
 
 document.getElementById("refreshBtn").addEventListener("click", refreshRuns);

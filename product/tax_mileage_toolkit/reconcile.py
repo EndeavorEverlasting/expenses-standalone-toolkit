@@ -96,16 +96,50 @@ def _get_thresholds(ws: Any) -> tuple[float, float, float]:
 def _export_cluster_matches(
     out_dir: Path, clusters: list[dict[str, Any]], known_sites: list[dict[str, Any]], strong: float, near: float
 ) -> list[dict[str, Any]]:
+    fieldnames = [
+        "cluster_id",
+        "review_status",
+        "user_site_label",
+        "candidate_work_site",
+        "distinct_days",
+        "first_seen",
+        "last_seen",
+        "lat",
+        "lng",
+        "nearest_site",
+        "distance_to_site_mi",
+        "auto_match_grade",
+        "nearby_sites_le_1_5mi",
+        "toll_region",
+    ]
     rows = []
+    if not clusters:
+        out_path = out_dir / "cluster_match_report.csv"
+        with out_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+        return rows
+
     for cluster in clusters:
         distances = []
         for site in known_sites:
             miles = haversine_miles(cluster["lat"], cluster["lng"], site["lat"], site["lng"])
             distances.append((miles, site))
         distances.sort(key=lambda x: x[0])
-        best_miles, best_site = distances[0]
-        nearby = [f'{site["site_name"]} ({miles:.2f} mi)' for miles, site in distances if miles <= near]
-        grade = "Strong" if best_miles <= strong else ("Near" if best_miles <= near else "")
+        if distances:
+            best_miles, best_site = distances[0]
+            nearby = [f'{site["site_name"]} ({miles:.2f} mi)' for miles, site in distances if miles <= near]
+            grade = "Strong" if best_miles <= strong else ("Near" if best_miles <= near else "")
+            nearest_site = best_site["site_name"]
+            toll_region = best_site.get("toll_region") or ""
+            distance_to_site_mi: float | None = round(best_miles, 3)
+            nearby_sites_le_1_5mi = "; ".join(nearby)
+        else:
+            nearest_site = ""
+            distance_to_site_mi = None
+            grade = ""
+            nearby_sites_le_1_5mi = ""
+            toll_region = ""
         rows.append(
             {
                 "cluster_id": cluster["cluster_id"],
@@ -117,16 +151,16 @@ def _export_cluster_matches(
                 "last_seen": cluster["last_seen"],
                 "lat": cluster["lat"],
                 "lng": cluster["lng"],
-                "nearest_site": best_site["site_name"],
-                "distance_to_site_mi": round(best_miles, 3),
+                "nearest_site": nearest_site,
+                "distance_to_site_mi": distance_to_site_mi,
                 "auto_match_grade": grade,
-                "nearby_sites_le_1_5mi": "; ".join(nearby),
-                "toll_region": best_site.get("toll_region") or "",
+                "nearby_sites_le_1_5mi": nearby_sites_le_1_5mi,
+                "toll_region": toll_region,
             }
         )
     out_path = out_dir / "cluster_match_report.csv"
     with out_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     return rows
@@ -163,6 +197,16 @@ def _export_cluster_overlaps(out_dir: Path, clusters: list[dict[str, Any]], over
 def _export_known_site_rollup(
     out_dir: Path, known_sites: list[dict[str, Any]], cluster_rows: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
+    fieldnames = [
+        "site_id",
+        "site_name",
+        "address",
+        "lat",
+        "lng",
+        "strong_cluster_count",
+        "near_cluster_count",
+        "toll_region",
+    ]
     counts = {site["site_name"]: {"strong": 0, "near": 0} for site in known_sites}
     for row in cluster_rows:
         site = row["nearest_site"]
@@ -188,9 +232,10 @@ def _export_known_site_rollup(
         )
     out_path = out_dir / "known_site_rollup_report.csv"
     with out_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        if rows:
+            writer.writerows(rows)
     return rows
 
 

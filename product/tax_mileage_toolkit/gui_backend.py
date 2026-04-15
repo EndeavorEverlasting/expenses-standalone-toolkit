@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -41,9 +42,19 @@ def create_app(workspace: Path) -> FastAPI:
 
     def _safe_path(raw: str) -> Path:
         p = Path(raw).expanduser().resolve()
-        if workspace not in p.parents and p != workspace:
+        if not p.is_relative_to(workspace):
             raise HTTPException(status_code=400, detail="Path outside workspace is not allowed.")
         return p
+
+    def _get_run_dir(run_id: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", run_id or ""):
+            raise HTTPException(status_code=400, detail="Invalid run id.")
+        run_dir = (runs_root / run_id).resolve()
+        if not run_dir.is_relative_to(runs_root):
+            raise HTTPException(status_code=400, detail="Invalid run id.")
+        if not run_dir.exists():
+            raise HTTPException(status_code=404, detail="Run not found.")
+        return run_dir
 
     def _list_runs() -> list[dict[str, Any]]:
         if not runs_root.exists():
@@ -154,9 +165,7 @@ def create_app(workspace: Path) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/summary")
     def api_summary(run_id: str) -> dict[str, Any]:
-        run_dir = (runs_root / run_id).resolve()
-        if not run_dir.exists():
-            raise HTTPException(status_code=404, detail="Run not found.")
+        run_dir = _get_run_dir(run_id)
 
         audit = {}
         audit_path = run_dir / "audit_report.json"
@@ -183,9 +192,7 @@ def create_app(workspace: Path) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/table/{name}")
     def api_table(run_id: str, name: str, q: str = "", limit: int = 500) -> dict[str, Any]:
-        run_dir = (runs_root / run_id).resolve()
-        if not run_dir.exists():
-            raise HTTPException(status_code=404, detail="Run not found.")
+        run_dir = _get_run_dir(run_id)
         mapping = {
             "suggestions": run_dir / "cluster_suggestion_report.csv",
             "matches": run_dir / "cluster_match_report.csv",
@@ -205,10 +212,10 @@ def create_app(workspace: Path) -> FastAPI:
         workbook_path = _safe_path(payload.workbook_path)
         if not workbook_path.exists():
             raise HTTPException(status_code=404, detail="Workbook path not found.")
-        if _run_state["active"]:
-            raise HTTPException(status_code=409, detail="Another run is currently active.")
 
         with _lock:
+            if _run_state["active"]:
+                raise HTTPException(status_code=409, detail="Another run is currently active.")
             _run_state["active"] = True
             run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             run_dir = runs_root / run_id
@@ -231,11 +238,9 @@ def create_app(workspace: Path) -> FastAPI:
     @app.post("/api/promote")
     def api_promote(payload: PromoteRequest) -> dict[str, Any]:
         workbook_path = _safe_path(payload.workbook_path)
-        run_dir = (runs_root / payload.run_id).resolve()
+        run_dir = _get_run_dir(payload.run_id)
         if not workbook_path.exists():
             raise HTTPException(status_code=404, detail="Workbook not found.")
-        if not run_dir.exists():
-            raise HTTPException(status_code=404, detail="Run not found.")
 
         selected_rows = set(payload.row_indices)
         if not selected_rows:

@@ -1,4 +1,5 @@
 import csv
+import html
 import json
 from datetime import datetime
 from pathlib import Path
@@ -54,10 +55,14 @@ def _table(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "<div class='card'>No rows available.</div>"
     headers = list(rows[0].keys())
-    head = "".join(f"<th>{h}</th>" for h in headers)
+    head = "".join(f"<th>{html.escape(str(h))}</th>" for h in headers)
     body_rows = []
     for row in rows:
-        body_rows.append("<tr>" + "".join(f"<td>{row.get(h, '')}</td>" for h in headers) + "</tr>")
+        body_rows.append(
+            "<tr>"
+            + "".join(f"<td>{html.escape(str(row.get(h, '') if row.get(h, '') is not None else ''))}</td>" for h in headers)
+            + "</tr>"
+        )
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
 
 
@@ -67,18 +72,29 @@ def _actionable_feedback_html(feedback: list[dict[str, Any]]) -> str:
     blocks = []
     for item in feedback:
         location = item.get("workbook_location", {}) or {}
-        sheet = location.get("sheet", "Unknown sheet")
-        columns = ", ".join(location.get("columns", [])) if isinstance(location.get("columns"), list) else ""
-        row_start = location.get("row_start", "?")
-        row_end = location.get("row_end", "?")
+        sheet = html.escape(str(location.get("sheet", "Unknown sheet")))
+        columns_list = location.get("columns", [])
+        if isinstance(columns_list, list):
+            columns = ", ".join(html.escape(str(col)) for col in columns_list)
+        else:
+            columns = html.escape(str(columns_list or ""))
+        row_start = html.escape(str(location.get("row_start", "?")))
+        row_end = html.escape(str(location.get("row_end", "?")))
         sample_rows = item.get("sample_rows", [])
-        sample_text = ", ".join(str(r) for r in sample_rows[:5]) if sample_rows else "none sampled"
+        if isinstance(sample_rows, list) and sample_rows:
+            sample_text = ", ".join(html.escape(str(r)) for r in sample_rows[:5])
+        else:
+            sample_text = "none sampled"
+        metric_key = html.escape(str(item.get("metric_key", "issue")))
+        metric_count = html.escape(str(item.get("count", 0)))
+        practical_action = html.escape(str(item.get("practical_action", "")))
+        alignment_goal = html.escape(str(item.get("alignment_goal", "")))
         blocks.append(
             "<div class='card'>"
-            f"<h3>{item.get('metric_key', 'issue')} ({item.get('count', 0)})</h3>"
+            f"<h3>{metric_key} ({metric_count})</h3>"
             f"<p><strong>Where:</strong> {sheet}, rows {row_start}-{row_end}, columns {columns}</p>"
-            f"<p><strong>Do this:</strong> {item.get('practical_action', '')}</p>"
-            f"<p><strong>Goal:</strong> {item.get('alignment_goal', '')}</p>"
+            f"<p><strong>Do this:</strong> {practical_action}</p>"
+            f"<p><strong>Goal:</strong> {alignment_goal}</p>"
             f"<p><strong>Sample rows:</strong> {sample_text}</p>"
             "</div>"
         )
