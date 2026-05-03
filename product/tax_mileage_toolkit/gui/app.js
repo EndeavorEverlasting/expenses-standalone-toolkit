@@ -162,12 +162,14 @@ async function refreshRuns(preserveStatus = false) {
 }
 
 async function loadSummary(runId) {
-  if (activeRunId !== runId) {
+  const runChanged = activeRunId !== runId;
+  if (runChanged) {
     _clusterAllRows = [];
     _clusterSiteRows = [];
+    _clusterLoadedRunId = null;
     _clusterSort = { col: "distinct_days", dir: "desc" };
     document.getElementById("clusterSummaryBar").innerHTML = '<div class="empty-state">Select a run to load cluster data.</div>';
-    document.getElementById("clusterTable").innerHTML = '<div class="empty-state">Load a run and click "Load" to explore clusters.</div>';
+    document.getElementById("clusterTable").innerHTML = '<div class="empty-state">Loading cluster data…</div>';
     document.getElementById("clusterRowCount").textContent = "";
     const canvas = document.getElementById("clusterHistogram");
     const ctx = canvas.getContext("2d");
@@ -185,6 +187,9 @@ async function loadSummary(runId) {
   activeRunId = runId;
   const data = await getJson(`/api/runs/${runId}/summary`);
   renderSummary(data);
+  if (runChanged) {
+    loadClusterExplorer();
+  }
 }
 
 function formatRows(rows) {
@@ -468,6 +473,7 @@ let _clusterMap = null;
 let _clusterPinLayer = null;
 let _sitePinLayer = null;
 let _clusterSiteRows = [];
+let _clusterLoadedRunId = null;
 let _activeClusterTab = "table";
 
 const CLUSTER_COLS = [
@@ -492,8 +498,8 @@ function resetClusterFilters() {
   document.getElementById("clusterMaxDays").value = "";
 }
 
-async function loadClusterExplorer() {
-  if (!activeRunId) {
+async function loadClusterExplorer(forRunId = activeRunId) {
+  if (!forRunId) {
     setStatus("error", "No run selected. Load a run from Runs History first.");
     return;
   }
@@ -501,16 +507,37 @@ async function loadClusterExplorer() {
   setStatus("running", "Loading cluster data…");
   try {
     const [statsData, tableData] = await Promise.all([
-      getJson(`/api/runs/${activeRunId}/cluster-stats`),
-      getJson(`/api/runs/${activeRunId}/table/matches?limit=5000`),
+      getJson(`/api/runs/${forRunId}/cluster-stats`),
+      getJson(`/api/runs/${forRunId}/table/matches?limit=5000`),
     ]);
+    if (activeRunId !== forRunId) return;
+    _clusterLoadedRunId = forRunId;
     _clusterAllRows = tableData.rows || [];
+    if (_clusterAllRows.length === 0) {
+      document.getElementById("clusterSummaryBar").innerHTML = '<div class="empty-state">No cluster match report for this run.</div>';
+      document.getElementById("clusterTable").innerHTML = '<div class="empty-state">No cluster data available for this run.</div>';
+      document.getElementById("clusterRowCount").textContent = "";
+      renderClusterHistogram([]);
+      setStatus("idle", "");
+      return;
+    }
     renderClusterSummaryBar(statsData);
     renderClusterHistogram(_clusterAllRows);
     applyClusterFilters();
     setStatus("success", `${_clusterAllRows.length} cluster${_clusterAllRows.length !== 1 ? "s" : ""} loaded`);
   } catch (err) {
-    setStatus("error", `Failed to load clusters: ${errMsg(err)}`);
+    if (activeRunId !== forRunId) return;
+    _clusterLoadedRunId = forRunId;
+    const msg = errMsg(err);
+    if (msg.startsWith("404")) {
+      document.getElementById("clusterSummaryBar").innerHTML = '<div class="empty-state">No cluster match report for this run.</div>';
+      document.getElementById("clusterTable").innerHTML = '<div class="empty-state">No cluster data available for this run.</div>';
+      document.getElementById("clusterRowCount").textContent = "";
+      renderClusterHistogram([]);
+      setStatus("idle", "");
+    } else {
+      setStatus("error", `Failed to load clusters: ${msg}`);
+    }
   }
 }
 
@@ -1027,8 +1054,8 @@ document.getElementById("showSitesToggle").addEventListener("change", (e) => {
 document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
   if (btn.dataset.view === "clusters") {
     btn.addEventListener("click", () => {
-      if (activeRunId && _clusterAllRows.length === 0) {
-        loadClusterExplorer();
+      if (activeRunId && _clusterLoadedRunId !== activeRunId) {
+        loadClusterExplorer(activeRunId);
       }
     });
   }
