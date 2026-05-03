@@ -164,6 +164,7 @@ async function refreshRuns(preserveStatus = false) {
 async function loadSummary(runId) {
   if (activeRunId !== runId) {
     _clusterAllRows = [];
+    _clusterSiteRows = [];
     _clusterSort = { col: "distinct_days", dir: "desc" };
     document.getElementById("clusterSummaryBar").innerHTML = '<div class="empty-state">Select a run to load cluster data.</div>';
     document.getElementById("clusterTable").innerHTML = '<div class="empty-state">Load a run and click "Load" to explore clusters.</div>';
@@ -172,6 +173,14 @@ async function loadSummary(runId) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     document.getElementById("clusterHistogramEmpty").classList.remove("hidden");
+    if (_clusterMap) {
+      _clusterMap.remove();
+      _clusterMap = null;
+      _clusterPinLayer = null;
+      _sitePinLayer = null;
+      document.getElementById("clusterMap").innerHTML = '<div class="empty-state">Load clusters to view the map.</div>';
+    }
+    document.getElementById("showSitesToggle").checked = false;
   }
   activeRunId = runId;
   const data = await getJson(`/api/runs/${runId}/summary`);
@@ -455,6 +464,11 @@ function errMsg(err) {
 
 let _clusterAllRows = [];
 let _clusterSort = { col: "distinct_days", dir: "desc" };
+let _clusterMap = null;
+let _clusterPinLayer = null;
+let _sitePinLayer = null;
+let _clusterSiteRows = [];
+let _activeClusterTab = "table";
 
 const CLUSTER_COLS = [
   { key: "cluster_id",          label: "Cluster ID" },
@@ -679,6 +693,192 @@ function applyClusterFilters() {
 
   filtered = sortClusterRows(filtered);
   renderClusterTable(filtered);
+  if (_activeClusterTab === "map") {
+    renderClusterMap(filtered);
+  }
+}
+
+function gradeToColor(grade) {
+  if (grade === "Strong") return "#22c55e";
+  if (grade === "Near")   return "#3b82f6";
+  return "#8b95aa";
+}
+
+function makeCircleIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+    <circle cx="11" cy="11" r="9" fill="${color}" fill-opacity="0.9" stroke="#fff" stroke-width="2"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -13],
+  });
+}
+
+function makeSiteIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+    <polygon points="9,1 17,17 1,17" fill="#f59e0b" fill-opacity="0.9" stroke="#fff" stroke-width="2"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [18, 18],
+    iconAnchor: [9, 17],
+    popupAnchor: [0, -19],
+  });
+}
+
+function initClusterMap() {
+  if (_clusterMap) return;
+  const container = document.getElementById("clusterMap");
+  container.innerHTML = "";
+  _clusterMap = L.map(container, {
+    center: [39.5, -98.35],
+    zoom: 4,
+    zoomControl: true,
+  });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(_clusterMap);
+  _clusterPinLayer = L.layerGroup().addTo(_clusterMap);
+  _sitePinLayer    = L.layerGroup().addTo(_clusterMap);
+}
+
+function renderClusterMap(rows) {
+  initClusterMap();
+  _clusterPinLayer.clearLayers();
+
+  const bounds = [];
+  rows.forEach(r => {
+    const lat = parseFloat(r.lat || "");
+    const lng = parseFloat(r.lng || "");
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const grade = (r.auto_match_grade || "").trim();
+    const color = gradeToColor(grade);
+    const icon  = makeCircleIcon(color);
+
+    const label    = escapeHtml(r.user_site_label || "—");
+    const cid      = escapeHtml(r.cluster_id      || "—");
+    const days     = escapeHtml(r.distinct_days    || "—");
+    const site     = escapeHtml(r.nearest_site     || "—");
+    const gradeStr = escapeHtml(grade              || "unmatched");
+
+    const popup = `
+      <div class="map-popup-title">${label}</div>
+      <div class="map-popup-row"><span class="map-popup-key">Cluster</span><span class="map-popup-val">${cid}</span></div>
+      <div class="map-popup-row"><span class="map-popup-key">Days</span><span class="map-popup-val">${days}</span></div>
+      <div class="map-popup-row"><span class="map-popup-key">Grade</span><span class="map-popup-val">${gradeStr}</span></div>
+      <div class="map-popup-row"><span class="map-popup-key">Nearest</span><span class="map-popup-val">${site}</span></div>`;
+
+    const marker = L.marker([lat, lng], { icon })
+      .bindPopup(popup, { className: "cluster-map-popup", maxWidth: 260 });
+    _clusterPinLayer.addLayer(marker);
+    bounds.push([lat, lng]);
+  });
+
+  if (bounds.length > 0) {
+    _clusterMap.fitBounds(L.latLngBounds(bounds), { padding: [32, 32], maxZoom: 14 });
+    const emptyOverlay = document.getElementById("clusterMapEmpty");
+    if (emptyOverlay) emptyOverlay.remove();
+  } else {
+    if (!document.getElementById("clusterMapEmpty")) {
+      const msg = document.createElement("div");
+      msg.id = "clusterMapEmpty";
+      msg.className = "cluster-map-empty-overlay";
+      msg.textContent = rows.length === 0
+        ? "No clusters match the current filters."
+        : "No clusters have location coordinates.";
+      document.getElementById("clusterMap").appendChild(msg);
+    }
+  }
+  _clusterMap.invalidateSize();
+}
+
+function renderSiteMap(siteRows) {
+  if (!_clusterMap) return;
+  _sitePinLayer.clearLayers();
+  const siteIcon = makeSiteIcon();
+  siteRows.forEach(r => {
+    const lat = parseFloat(r.lat || r.site_lat || "");
+    const lng = parseFloat(r.lng || r.site_lng || "");
+    const name = r.site_name || r.name || r.label || "Known site";
+    if (isNaN(lat) || isNaN(lng)) return;
+    const popup = `<div class="map-popup-title">${escapeHtml(name)}</div>
+      <div class="map-popup-row"><span class="map-popup-key">Site</span><span class="map-popup-val">${escapeHtml(name)}</span></div>`;
+    L.marker([lat, lng], { icon: siteIcon })
+      .bindPopup(popup, { className: "cluster-map-popup", maxWidth: 220 })
+      .addTo(_sitePinLayer);
+  });
+}
+
+async function loadAndShowSites() {
+  if (!activeRunId) return;
+  try {
+    const data = await getJson(`/api/runs/${activeRunId}/table/sites?limit=2000`);
+    _clusterSiteRows = data.rows || [];
+    renderSiteMap(_clusterSiteRows);
+    if (_clusterSiteRows.length === 0) {
+      setStatus("error", "No known site data found for this run.");
+    }
+  } catch (err) {
+    _clusterSiteRows = [];
+    setStatus("error", `Could not load known sites: ${errMsg(err)}`);
+  }
+}
+
+function switchClusterTab(tab) {
+  _activeClusterTab = tab;
+  document.querySelectorAll(".cluster-tab-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  });
+  document.getElementById("clusterTablePane").classList.toggle("active", tab === "table");
+  document.getElementById("clusterTablePane").classList.toggle("hidden", tab !== "table");
+  document.getElementById("clusterMapPane").classList.toggle("active", tab === "map");
+  document.getElementById("clusterMapPane").classList.toggle("hidden", tab !== "map");
+
+  const sitesLabel = document.getElementById("showSitesLabel");
+  if (tab === "map") {
+    sitesLabel.classList.remove("hidden");
+    const filtered = getCurrentFilteredRows();
+    renderClusterMap(filtered);
+    if (document.getElementById("showSitesToggle").checked) {
+      renderSiteMap(_clusterSiteRows);
+    }
+  } else {
+    sitesLabel.classList.add("hidden");
+  }
+}
+
+function getCurrentFilteredRows() {
+  const search   = document.getElementById("clusterSearch").value.trim().toLowerCase();
+  const status   = document.getElementById("clusterStatusFilter").value;
+  const grade    = document.getElementById("clusterGradeFilter").value;
+  const minDays  = parseInt(document.getElementById("clusterMinDays").value, 10);
+  const maxDays  = parseInt(document.getElementById("clusterMaxDays").value, 10);
+
+  return _clusterAllRows.filter(r => {
+    if (search) {
+      const haystack = ((r.user_site_label || "") + " " + (r.nearest_site || "")).toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    if (status === "unresolved") {
+      const s = (r.review_status || "").trim().toLowerCase();
+      if (s && s !== "unresolved" && s !== "pending") return false;
+    }
+    if (grade) {
+      const g = (r.auto_match_grade || "").trim();
+      if (grade === "unmatched") { if (g) return false; }
+      else if (g !== grade) return false;
+    }
+    const days = parseInt(r.distinct_days, 10) || 0;
+    if (!isNaN(minDays) && days < minDays) return false;
+    if (!isNaN(maxDays) && days > maxDays) return false;
+    return true;
+  });
 }
 
 function sortClusterRows(rows) {
@@ -807,6 +1007,22 @@ document.getElementById("dryPromoteBtn").addEventListener("click", () => promote
 document.getElementById("promoteBtn").addEventListener("click", () => promote(false));
 
 document.getElementById("clusterLoadBtn").addEventListener("click", loadClusterExplorer);
+
+document.querySelectorAll(".cluster-tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => switchClusterTab(btn.dataset.tab));
+});
+
+document.getElementById("showSitesToggle").addEventListener("change", (e) => {
+  if (e.target.checked) {
+    if (_clusterSiteRows.length === 0) {
+      loadAndShowSites();
+    } else {
+      renderSiteMap(_clusterSiteRows);
+    }
+  } else {
+    if (_sitePinLayer) _sitePinLayer.clearLayers();
+  }
+});
 
 document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
   if (btn.dataset.view === "clusters") {

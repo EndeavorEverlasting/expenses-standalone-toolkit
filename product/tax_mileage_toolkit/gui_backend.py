@@ -348,6 +348,7 @@ def create_app(workspace: Path) -> FastAPI:
             "suggestions": run_dir / "cluster_suggestion_report.csv",
             "matches": run_dir / "cluster_match_report.csv",
             "overlaps": run_dir / "cluster_overlap_report.csv",
+            "sites": run_dir / "known_site_rollup_report.csv",
         }
         if name not in mapping:
             raise HTTPException(status_code=400, detail="Unknown table name.")

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mileage GUI Workbench</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
 <div id="app">
@@ -183,8 +184,26 @@
             <button id="clusterLoadBtn" class="btn btn-secondary">Load</button>
             <span id="clusterRowCount" class="selection-count"></span>
           </div>
-          <div id="clusterTable" class="table-wrap cluster-table-wrap">
-            <div class="empty-state">Load a run and click "Load" to explore clusters.</div>
+
+          <div class="cluster-view-tabs">
+            <button class="cluster-tab-btn active" data-tab="table">Table</button>
+            <button class="cluster-tab-btn" data-tab="map">Map</button>
+            <label class="cluster-sites-toggle hidden" id="showSitesLabel">
+              <input type="checkbox" id="showSitesToggle" />
+              <span>Show known sites</span>
+            </label>
+          </div>
+
+          <div id="clusterTablePane" class="cluster-tab-pane active">
+            <div id="clusterTable" class="table-wrap cluster-table-wrap">
+              <div class="empty-state">Load a run and click "Load" to explore clusters.</div>
+            </div>
+          </div>
+
+          <div id="clusterMapPane" class="cluster-tab-pane hidden">
+            <div id="clusterMap" class="cluster-map-container">
+              <div class="empty-state">Load clusters to view the map.</div>
+            </div>
           </div>
         </div>
       </section>
@@ -193,6 +212,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

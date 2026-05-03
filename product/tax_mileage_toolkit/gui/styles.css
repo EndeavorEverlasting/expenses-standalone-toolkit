@@ -790,6 +790,133 @@ pre {
   max-height: 560px;
 }
 
+.cluster-view-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.cluster-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: -1px;
+  border-radius: 0;
+  transition: color .15s, border-color .15s;
+}
+
+.cluster-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.cluster-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.cluster-tab-pane { display: none; }
+.cluster-tab-pane.active { display: block; }
+
+.cluster-sites-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cluster-sites-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.cluster-map-container {
+  width: 100%;
+  height: 500px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+.cluster-map-container .leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #1a1f2e;
+  font-family: "Inter", "Segoe UI", system-ui, Arial, sans-serif;
+}
+
+.cluster-map-popup .leaflet-popup-content-wrapper {
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.cluster-map-popup .leaflet-popup-tip {
+  background: var(--bg-overlay);
+}
+
+.cluster-map-popup .leaflet-popup-content {
+  margin: 10px 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.map-popup-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.map-popup-row {
+  display: flex;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.map-popup-key {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  min-width: 70px;
+}
+
+.map-popup-val {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.cluster-map-empty-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 14, 20, 0.75);
+  color: var(--text-muted);
+  font-size: 13px;
+  z-index: 500;
+  pointer-events: none;
+}
+
 .cluster-table th {
   cursor: pointer;
   user-select: none;
