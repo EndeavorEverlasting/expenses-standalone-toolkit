@@ -1169,6 +1169,11 @@ function renderVaultResult(resultEl, dropzone, data) {
     ? `<span class="vault-extract-partial">⚠ Partially Parsed</span>`
     : `<span class="vault-extract-ok">✓ Parsed</span>`;
 
+  const canPush = data.doc_type === "w2" || data.doc_type === "bank";
+  const pushBtn = canPush
+    ? `<button class="vault-push-btn" data-extract-path="${escapeHtml(data.extract_path)}" data-doc-type="${escapeHtml(data.doc_type)}">Push to Workbook</button>`
+    : "";
+
   resultEl.innerHTML = `
     <div class="vault-extract-card${isPartial ? " vault-extract-card-partial" : ""}">
       <div class="vault-extract-header">
@@ -1177,8 +1182,51 @@ function renderVaultResult(resultEl, dropzone, data) {
       </div>
       <div class="vault-field-list">${fields}</div>
       ${warnings}
-      <div class="vault-saved-path">Saved → <code>${escapeHtml(data.saved_path)}</code></div>
+      <div class="vault-saved-path">Saved → <code>${escapeHtml(data.extract_path || data.saved_path)}</code></div>
+      ${pushBtn ? `<div class="vault-push-row">${pushBtn}<span class="vault-push-status" aria-live="polite"></span></div>` : ""}
     </div>`;
+
+  if (canPush) {
+    const btn = resultEl.querySelector(".vault-push-btn");
+    const statusSpan = resultEl.querySelector(".vault-push-status");
+    btn.addEventListener("click", () => pushExtractToWorkbook(btn, statusSpan));
+  }
+}
+
+async function pushExtractToWorkbook(btn, statusSpan) {
+  const workbookPath = document.getElementById("workbookPath").value.trim();
+  if (!workbookPath) {
+    statusSpan.textContent = "⚠ Set a workbook path in Run Controls first.";
+    statusSpan.className = "vault-push-status vault-push-warn";
+    return;
+  }
+  const extractPath = btn.dataset.extractPath;
+  btn.disabled = true;
+  statusSpan.textContent = "Pushing…";
+  statusSpan.className = "vault-push-status vault-push-running";
+  try {
+    const res = await fetch("/api/vault/push-to-workbook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workbook_path: workbookPath, extract_path: extractPath }),
+    });
+    if (!res.ok) {
+      let detail = `${res.status} error`;
+      try { detail = (await res.json()).detail || detail; } catch (_) { detail = await res.text() || detail; }
+      statusSpan.textContent = `✗ ${detail}`;
+      statusSpan.className = "vault-push-status vault-push-error";
+      return;
+    }
+    const data = await res.json();
+    const cellCount = data.written && data.written.cells ? Object.keys(data.written.cells).length : 0;
+    statusSpan.textContent = `✓ Written to "${data.written.sheet}" (${cellCount} cell${cellCount !== 1 ? "s" : ""})`;
+    statusSpan.className = "vault-push-status vault-push-ok";
+  } catch (err) {
+    statusSpan.textContent = `✗ ${err instanceof Error ? err.message : String(err)}`;
+    statusSpan.className = "vault-push-status vault-push-error";
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderVaultError(resultEl, dropzone, message) {

@@ -31,6 +31,11 @@ class PromoteRequest(BaseModel):
     dry_run: bool = True
 
 
+class PushToWorkbookRequest(BaseModel):
+    workbook_path: str
+    extract_path: str
+
+
 def create_app(workspace: Path) -> FastAPI:
     app = FastAPI(title="Mileage GUI Workbench")
     gui_dir = Path(__file__).with_name("gui")
@@ -490,6 +495,134 @@ def create_app(workspace: Path) -> FastAPI:
         out.write_text(json.dumps(report, indent=2), encoding="utf-8")
         report["promotion_report"] = str(out)
         return report
+
+    @app.post("/api/vault/push-to-workbook")
+    def api_vault_push(payload: PushToWorkbookRequest) -> dict[str, Any]:
+        workbook_path = _safe_path(payload.workbook_path)
+        extract_path = _safe_path(payload.extract_path)
+
+        if not workbook_path.exists():
+            raise HTTPException(status_code=404, detail="Workbook not found.")
+        if not extract_path.exists():
+            raise HTTPException(status_code=404, detail="Extract file not found.")
+
+        try:
+            extract = json.loads(extract_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not read extract: {exc}")
+
+        doc_type = extract.get("doc_type")
+        if doc_type not in ("w2", "bank"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Push to workbook is only supported for W-2 and bank extracts (got '{doc_type}').",
+            )
+
+        try:
+            from openpyxl import load_workbook as _lw
+        except ImportError:
+            raise HTTPException(status_code=500, detail="openpyxl is required but not installed.")
+
+        backup_path = _backup_workbook(workbook_path, workbook_path.parent / "vault_push_backups")
+        wb = _lw(workbook_path)
+
+        SHEET_NAME = "Evidence Summary"
+        if SHEET_NAME not in wb.sheetnames:
+            ws = wb.create_sheet(SHEET_NAME)
+            ws["A1"] = "Evidence Summary"
+            ws["A3"] = "W-2 Income Data"
+            ws["A4"] = "Tax Year"
+            ws["A5"] = "Employer Name"
+            ws["A6"] = "Box 1 Wages"
+            ws["A7"] = "Box 2 Federal Withheld"
+            ws["A8"] = "W-2 Last Updated"
+            ws["A10"] = "Bank Statement Data"
+            ws["A11"] = "Date Range Start"
+            ws["A12"] = "Date Range End"
+            ws["A13"] = "Transaction Count"
+            ws["A14"] = "Total Credits"
+            ws["A15"] = "Total Debits"
+            ws["A16"] = "Net Total"
+            ws["A17"] = "Bank Last Updated"
+        else:
+            ws = wb[SHEET_NAME]
+            ws["A14"] = "Total Credits"
+            ws["A15"] = "Total Debits"
+            ws["A16"] = "Net Total"
+            ws["A17"] = "Bank Last Updated"
+
+        written: dict[str, Any] = {}
+        now_str = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+        def _parse_amount(raw: Any) -> float | None:
+            if raw is None:
+                return None
+            try:
+                return float(str(raw).replace(",", "").replace("$", "").strip())
+            except (ValueError, TypeError):
+                return None
+
+        if doc_type == "w2":
+            def _num(v: Any) -> float | str | None:
+                if v is None:
+                    return None
+                try:
+                    return float(str(v).replace(",", ""))
+                except (ValueError, TypeError):
+                    return str(v)
+
+            ws["B4"] = extract.get("tax_year")
+            ws["B5"] = extract.get("employer_name")
+            ws["B6"] = _num(extract.get("box1_wages"))
+            ws["B7"] = _num(extract.get("box2_federal_withheld"))
+            ws["B8"] = now_str
+            written = {
+                "sheet": SHEET_NAME,
+                "cells": {
+                    "B4 (tax_year)": extract.get("tax_year"),
+                    "B5 (employer_name)": extract.get("employer_name"),
+                    "B6 (box1_wages)": ws["B6"].value,
+                    "B7 (box2_federal_withheld)": ws["B7"].value,
+                    "B8 (w2_last_updated)": now_str,
+                },
+            }
+
+        elif doc_type == "bank":
+            transactions = extract.get("transactions") or []
+            amounts = [_parse_amount(t.get("amount")) for t in transactions]
+            amounts = [a for a in amounts if a is not None]
+            total_credits = round(sum(a for a in amounts if a > 0), 2)
+            total_debits = round(sum(a for a in amounts if a < 0), 2)
+            net_total = round(sum(amounts), 2)
+
+            ws["B11"] = extract.get("date_range_start")
+            ws["B12"] = extract.get("date_range_end")
+            ws["B13"] = extract.get("transaction_count")
+            ws["B14"] = total_credits
+            ws["B15"] = total_debits
+            ws["B16"] = net_total
+            ws["B17"] = now_str
+            written = {
+                "sheet": SHEET_NAME,
+                "cells": {
+                    "B11 (date_range_start)": extract.get("date_range_start"),
+                    "B12 (date_range_end)": extract.get("date_range_end"),
+                    "B13 (transaction_count)": extract.get("transaction_count"),
+                    "B14 (total_credits)": total_credits,
+                    "B15 (total_debits)": total_debits,
+                    "B16 (net_total)": net_total,
+                    "B17 (bank_last_updated)": now_str,
+                },
+            }
+
+        wb.save(workbook_path)
+        return {
+            "status": "ok",
+            "doc_type": doc_type,
+            "workbook_path": str(workbook_path),
+            "backup_path": str(backup_path),
+            "written": written,
+        }
 
     return app
 

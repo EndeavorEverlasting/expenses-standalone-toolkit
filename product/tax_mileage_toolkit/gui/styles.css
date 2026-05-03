@@ -1320,3 +1320,57 @@ pre {
   padding: 4px 0;
   word-break: break-word;
 }
+
+.vault-push-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  flex-wrap: wrap;
+}
+
+.vault-push-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+
+.vault-push-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.vault-push-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.vault-push-status {
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.vault-push-status.vault-push-ok {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.vault-push-status.vault-push-error {
+  color: var(--red);
+}
+
+.vault-push-status.vault-push-warn {
+  color: var(--amber);
+}
+
+.vault-push-status.vault-push-running {
+  color: var(--text-muted);
+}
