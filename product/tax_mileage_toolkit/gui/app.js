@@ -1132,9 +1132,9 @@ refreshRuns().catch(err => {
 // ─── Evidence Vault ───────────────────────────────────────────────────────────
 
 const VAULT_ZONES = [
-  { docType: "w2",   dropzoneId: "dropzoneW2",   fileInputId: "fileW2",   resultId: "resultW2" },
-  { docType: "bank", dropzoneId: "dropzoneBank",  fileInputId: "fileBank", resultId: "resultBank" },
-  { docType: "maps", dropzoneId: "dropzoneMaps",  fileInputId: "fileMaps", resultId: "resultMaps" },
+  { docType: "w2",   dropzoneId: "dropzoneW2",   fileInputId: "fileW2",   resultId: "resultW2",   historyListId: "historyListW2",   historyCountId: "historyCountW2" },
+  { docType: "bank", dropzoneId: "dropzoneBank",  fileInputId: "fileBank", resultId: "resultBank", historyListId: "historyListBank", historyCountId: "historyCountBank" },
+  { docType: "maps", dropzoneId: "dropzoneMaps",  fileInputId: "fileMaps", resultId: "resultMaps", historyListId: "historyListMaps", historyCountId: "historyCountMaps" },
 ];
 
 function renderVaultResult(resultEl, dropzone, data) {
@@ -1258,14 +1258,145 @@ async function uploadVaultFile(docType, file, resultEl, dropzone) {
   }
 }
 
-VAULT_ZONES.forEach(({ docType, dropzoneId, fileInputId, resultId }) => {
+function parseDateFromFilename(filename) {
+  const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}  ${m[4]}:${m[5]}:${m[6]}`;
+}
+
+function resolveHistoryDate(item) {
+  const parsedAt = item.extract && item.extract.parsed_at;
+  if (parsedAt) {
+    try {
+      const d = new Date(parsedAt);
+      if (!isNaN(d.getTime())) {
+        const pad = n => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+    } catch (_) {}
+  }
+  return parseDateFromFilename(item.filename) || "—";
+}
+
+function historyItemSummary(item) {
+  const ext = item.extract;
+  if (!ext) return "";
+  if (ext.doc_type === "w2") {
+    const year = ext.tax_year ? `Year: ${ext.tax_year}` : "";
+    const wages = ext.box1_wages ? `Wages: $${ext.box1_wages}` : "";
+    return [year, wages].filter(Boolean).join("  ·  ");
+  }
+  if (ext.doc_type === "bank") {
+    const count = ext.transaction_count != null ? `${ext.transaction_count} txns` : "";
+    const range = (ext.date_range_start && ext.date_range_end)
+      ? `${ext.date_range_start} → ${ext.date_range_end}` : "";
+    return [count, range].filter(Boolean).join("  ·  ");
+  }
+  if (ext.doc_type === "maps") {
+    return ext.location_count != null ? `${ext.location_count} location records` : "";
+  }
+  return "";
+}
+
+function renderVaultHistory(listEl, countEl, items, docType) {
+  countEl.textContent = items.length > 0 ? `${items.length}` : "0";
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="vault-history-empty">No files ingested yet.</div>';
+    return;
+  }
+  listEl.innerHTML = items.map((item, idx) => {
+    const parsedDate = resolveHistoryDate(item);
+    const summary = historyItemSummary(item);
+    const hasExtract = !!item.extract;
+    const viewBtn = hasExtract
+      ? `<button class="vault-history-view-btn" data-idx="${idx}">View</button>`
+      : `<span class="vault-history-no-extract">no extract</span>`;
+    return `
+      <div class="vault-history-item" data-idx="${idx}">
+        <div class="vault-history-item-main">
+          <div class="vault-history-item-info">
+            <span class="vault-history-filename">${escapeHtml(item.filename)}</span>
+            <span class="vault-history-date">${escapeHtml(parsedDate)}</span>
+            ${summary ? `<span class="vault-history-summary-text">${escapeHtml(summary)}</span>` : ""}
+          </div>
+          <div class="vault-history-actions">
+            ${viewBtn}
+            <button class="vault-history-delete-btn" data-filename="${escapeHtml(item.filename)}" data-doc-type="${escapeHtml(docType)}">Delete</button>
+          </div>
+        </div>
+        ${hasExtract ? `<pre class="vault-history-json hidden" data-idx="${idx}">${escapeHtml(JSON.stringify(item.extract, null, 2))}</pre>` : ""}
+      </div>`;
+  }).join("");
+
+  listEl.querySelectorAll(".vault-history-view-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = btn.dataset.idx;
+      const pre = listEl.querySelector(`.vault-history-json[data-idx="${idx}"]`);
+      if (!pre) return;
+      const hidden = pre.classList.toggle("hidden");
+      btn.textContent = hidden ? "View" : "Hide";
+    });
+  });
+
+  listEl.querySelectorAll(".vault-history-delete-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const filename = btn.dataset.filename;
+      const dt = btn.dataset.docType;
+      if (!confirm(`Delete "${filename}" and its extract? This cannot be undone.`)) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/ingest/${encodeURIComponent(dt)}/${encodeURIComponent(filename)}`, { method: "DELETE" });
+        if (!res.ok) {
+          let detail = `${res.status} error`;
+          try { detail = (await res.json()).detail || detail; } catch (_) {}
+          setStatus("error", `Delete failed: ${detail}`);
+          btn.disabled = false;
+          return;
+        }
+        setStatus("success", `Deleted ${filename}`);
+        loadVaultHistory(dt);
+      } catch (err) {
+        setStatus("error", `Delete failed: ${errMsg(err)}`);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadVaultHistory(docType) {
+  const zone = VAULT_ZONES.find(z => z.docType === docType);
+  if (!zone) return;
+  const listEl  = document.getElementById(zone.historyListId);
+  const countEl = document.getElementById(zone.historyCountId);
+  if (!listEl || !countEl) return;
+  try {
+    const data = await getJson(`/api/ingest/${encodeURIComponent(docType)}/list`);
+    renderVaultHistory(listEl, countEl, data.items || [], docType);
+  } catch (err) {
+    listEl.innerHTML = `<div class="vault-history-empty">Failed to load history: ${escapeHtml(errMsg(err))}</div>`;
+  }
+}
+
+function loadAllVaultHistories() {
+  VAULT_ZONES.forEach(z => loadVaultHistory(z.docType));
+}
+
+document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
+  if (btn.dataset.view === "vault") {
+    btn.addEventListener("click", loadAllVaultHistories);
+  }
+});
+
+VAULT_ZONES.forEach(({ docType, dropzoneId, fileInputId, resultId, historyListId, historyCountId }) => {
   const dropzone  = document.getElementById(dropzoneId);
   const fileInput = document.getElementById(fileInputId);
   const resultEl  = document.getElementById(resultId);
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
-    if (file) uploadVaultFile(docType, file, resultEl, dropzone);
+    if (file) {
+      uploadVaultFile(docType, file, resultEl, dropzone).then(() => loadVaultHistory(docType));
+    }
     fileInput.value = "";
   });
 
@@ -1282,6 +1413,8 @@ VAULT_ZONES.forEach(({ docType, dropzoneId, fileInputId, resultId }) => {
     e.preventDefault();
     dropzone.classList.remove("vault-dragover");
     const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) uploadVaultFile(docType, file, resultEl, dropzone);
+    if (file) {
+      uploadVaultFile(docType, file, resultEl, dropzone).then(() => loadVaultHistory(docType));
+    }
   });
 });

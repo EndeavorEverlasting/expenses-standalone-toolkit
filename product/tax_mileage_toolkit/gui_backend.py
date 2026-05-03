@@ -450,6 +450,52 @@ def create_app(workspace: Path) -> FastAPI:
         result["saved_path"] = str(dest_path)
         return result
 
+    @app.get("/api/ingest/{doc_type}/list")
+    def api_ingest_list(doc_type: str) -> dict[str, Any]:
+        if doc_type not in _incoming_subdirs:
+            raise HTTPException(status_code=400, detail=f"Unknown doc_type '{doc_type}'. Use: w2, bank, maps.")
+        source_dir = _incoming_subdirs[doc_type]
+        items = []
+        for f in sorted(source_dir.iterdir(), reverse=True):
+            if not f.is_file():
+                continue
+            extract_file = _processed_dir / f"{f.stem}_extract.json"
+            extract: dict[str, Any] | None = None
+            extract_path: str | None = None
+            if extract_file.exists():
+                try:
+                    extract = json.loads(extract_file.read_text(encoding="utf-8"))
+                    extract_path = str(extract_file)
+                except Exception:
+                    pass
+            items.append({
+                "filename": f.name,
+                "file_path": str(f),
+                "extract": extract,
+                "extract_path": extract_path,
+            })
+        return {"doc_type": doc_type, "items": items}
+
+    @app.delete("/api/ingest/{doc_type}/{filename}")
+    def api_ingest_delete(doc_type: str, filename: str) -> dict[str, Any]:
+        if doc_type not in _incoming_subdirs:
+            raise HTTPException(status_code=400, detail=f"Unknown doc_type '{doc_type}'. Use: w2, bank, maps.")
+        if "/" in filename or "\\" in filename or filename.startswith("."):
+            raise HTTPException(status_code=400, detail="Invalid filename.")
+        file_path = (_incoming_subdirs[doc_type] / filename).resolve()
+        if not file_path.is_relative_to(_incoming_subdirs[doc_type].resolve()):
+            raise HTTPException(status_code=400, detail="Invalid filename.")
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found.")
+        deleted: list[str] = []
+        file_path.unlink()
+        deleted.append(str(file_path))
+        extract_file = (_processed_dir / f"{file_path.stem}_extract.json").resolve()
+        if extract_file.exists() and extract_file.is_relative_to(_processed_dir.resolve()):
+            extract_file.unlink()
+            deleted.append(str(extract_file))
+        return {"deleted": deleted}
+
     @app.post("/api/promote")
     def api_promote(payload: PromoteRequest) -> dict[str, Any]:
         workbook_path = _safe_path(payload.workbook_path)
