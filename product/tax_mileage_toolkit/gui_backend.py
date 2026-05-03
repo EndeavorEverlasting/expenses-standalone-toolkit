@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .audit import run_audit
+from .ingest import parse_w2, parse_bank_statement, parse_maps_timeline
 from .reconcile import _backup_workbook, run_reconcile, run_suggest_clusters
 from .reporting import render_html_reports
 
@@ -383,6 +384,66 @@ def create_app(workspace: Path) -> FastAPI:
         )
         t.start()
         return {"run_id": run_id, "status": "running"}
+
+    _incoming_root = workspace / "incoming"
+    _incoming_subdirs: dict[str, Path] = {
+        "w2":   _incoming_root / "w2",
+        "bank": _incoming_root / "bank",
+        "maps": _incoming_root / "maps",
+    }
+    _processed_dir = _incoming_root / "processed"
+    for _d in list(_incoming_subdirs.values()) + [_processed_dir]:
+        _d.mkdir(parents=True, exist_ok=True)
+
+    _MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+    _ALLOWED_EXTENSIONS: dict[str, list[str]] = {
+        "w2":   [".pdf"],
+        "bank": [".pdf", ".csv"],
+        "maps": [".json", ".png", ".jpg", ".jpeg", ".webp"],
+    }
+
+    @app.post("/api/ingest/{doc_type}")
+    async def api_ingest(doc_type: str, file: UploadFile = File(...)) -> dict[str, Any]:
+        if doc_type not in _incoming_subdirs:
+            raise HTTPException(status_code=400, detail=f"Unknown doc_type '{doc_type}'. Use: w2, bank, maps.")
+
+        filename = file.filename or "upload"
+        suffix = Path(filename).suffix.lower()
+        allowed = _ALLOWED_EXTENSIONS[doc_type]
+        if suffix not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type '{suffix}' not allowed for {doc_type}. Allowed: {', '.join(allowed)}",
+            )
+
+        file_bytes = await file.read()
+        if len(file_bytes) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds 50 MB limit.")
+        if len(file_bytes) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        now = datetime.now()
+        stamp = now.strftime("%Y%m%d_%H%M%S") + f"_{now.microsecond:06d}"
+        safe_stem = re.sub(r"[^\w\-.]", "_", Path(filename).stem)[:80]
+        dest_filename = f"{stamp}_{safe_stem}{suffix}"
+        dest_path = _incoming_subdirs[doc_type] / dest_filename
+
+        dest_path.write_bytes(file_bytes)
+
+        try:
+            if doc_type == "w2":
+                result = parse_w2(file_bytes, dest_filename, _processed_dir)
+            elif doc_type == "bank":
+                result = parse_bank_statement(file_bytes, dest_filename, _processed_dir)
+            else:
+                result = parse_maps_timeline(file_bytes, dest_filename, _processed_dir)
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Parse error: {exc}")
+
+        result["saved_path"] = str(dest_path)
+        return result
 
     @app.post("/api/promote")
     def api_promote(payload: PromoteRequest) -> dict[str, Any]:

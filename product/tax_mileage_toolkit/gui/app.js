@@ -1064,3 +1064,112 @@ workbookPathInput.addEventListener("blur", () => {
 refreshRuns().catch(err => {
   setStatus("error", `Failed to load runs: ${errMsg(err)}`);
 });
+
+// ─── Evidence Vault ───────────────────────────────────────────────────────────
+
+const VAULT_ZONES = [
+  { docType: "w2",   dropzoneId: "dropzoneW2",   fileInputId: "fileW2",   resultId: "resultW2" },
+  { docType: "bank", dropzoneId: "dropzoneBank",  fileInputId: "fileBank", resultId: "resultBank" },
+  { docType: "maps", dropzoneId: "dropzoneMaps",  fileInputId: "fileMaps", resultId: "resultMaps" },
+];
+
+function renderVaultResult(resultEl, dropzone, data) {
+  const isPartial = data.parse_status === "partial";
+  dropzone.classList.remove("vault-uploading", "vault-error", "vault-success", "vault-partial");
+  dropzone.classList.add(isPartial ? "vault-partial" : "vault-success");
+
+  const warnings = Array.isArray(data.parse_warnings) && data.parse_warnings.length > 0
+    ? `<div class="vault-warnings">${data.parse_warnings.map(w =>
+        `<div class="vault-warning-item">⚠ ${escapeHtml(w)}</div>`
+      ).join("")}</div>`
+    : "";
+
+  let fields = "";
+  if (data.doc_type === "w2") {
+    fields = `
+      <div class="vault-field-row"><span class="vault-field-key">Tax Year</span><span class="vault-field-val">${escapeHtml(data.tax_year ?? "—")}</span></div>
+      <div class="vault-field-row"><span class="vault-field-key">Employer</span><span class="vault-field-val">${escapeHtml(data.employer_name ?? "—")}</span></div>
+      <div class="vault-field-row"><span class="vault-field-key">SSN (last 4)</span><span class="vault-field-val">${escapeHtml(data.employee_ssn_last4 ?? "—")}</span></div>
+      <div class="vault-field-row"><span class="vault-field-key">Box 1 Wages</span><span class="vault-field-val vault-money">${data.box1_wages ? "$" + escapeHtml(data.box1_wages) : "—"}</span></div>
+      <div class="vault-field-row"><span class="vault-field-key">Box 2 Fed. Withheld</span><span class="vault-field-val vault-money">${data.box2_federal_withheld ? "$" + escapeHtml(data.box2_federal_withheld) : "—"}</span></div>`;
+  } else if (data.doc_type === "bank") {
+    fields = `
+      <div class="vault-field-row"><span class="vault-field-key">Transactions</span><span class="vault-field-val">${escapeHtml(data.transaction_count)}</span></div>
+      <div class="vault-field-row"><span class="vault-field-key">Date Range</span><span class="vault-field-val">${escapeHtml(data.date_range_start ?? "—")} → ${escapeHtml(data.date_range_end ?? "—")}</span></div>`;
+  } else if (data.doc_type === "maps") {
+    fields = `
+      <div class="vault-field-row"><span class="vault-field-key">Location Records</span><span class="vault-field-val">${escapeHtml(data.location_count)}</span></div>`;
+  }
+
+  const statusLabel = isPartial
+    ? `<span class="vault-extract-partial">⚠ Partially Parsed</span>`
+    : `<span class="vault-extract-ok">✓ Parsed</span>`;
+
+  resultEl.innerHTML = `
+    <div class="vault-extract-card${isPartial ? " vault-extract-card-partial" : ""}">
+      <div class="vault-extract-header">
+        ${statusLabel}
+        <span class="vault-extract-filename">${escapeHtml(data.filename)}</span>
+      </div>
+      <div class="vault-field-list">${fields}</div>
+      ${warnings}
+      <div class="vault-saved-path">Saved → <code>${escapeHtml(data.saved_path)}</code></div>
+    </div>`;
+}
+
+function renderVaultError(resultEl, dropzone, message) {
+  dropzone.classList.remove("vault-uploading", "vault-success");
+  dropzone.classList.add("vault-error");
+  resultEl.innerHTML = `<div class="vault-error-msg">✗ ${escapeHtml(message)}</div>`;
+}
+
+async function uploadVaultFile(docType, file, resultEl, dropzone) {
+  dropzone.classList.remove("vault-success", "vault-error");
+  dropzone.classList.add("vault-uploading");
+  resultEl.innerHTML = `<div class="vault-uploading-msg"><span class="spinner" style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;"></span>Parsing…</div>`;
+
+  const form = new FormData();
+  form.append("file", file);
+
+  try {
+    const res = await fetch(`/api/ingest/${docType}`, { method: "POST", body: form });
+    if (!res.ok) {
+      let detail = `${res.status} error`;
+      try { detail = (await res.json()).detail || detail; } catch (_) { detail = await res.text() || detail; }
+      renderVaultError(resultEl, dropzone, detail);
+      return;
+    }
+    const data = await res.json();
+    renderVaultResult(resultEl, dropzone, data);
+  } catch (err) {
+    renderVaultError(resultEl, dropzone, err instanceof Error ? err.message : String(err));
+  }
+}
+
+VAULT_ZONES.forEach(({ docType, dropzoneId, fileInputId, resultId }) => {
+  const dropzone  = document.getElementById(dropzoneId);
+  const fileInput = document.getElementById(fileInputId);
+  const resultEl  = document.getElementById(resultId);
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (file) uploadVaultFile(docType, file, resultEl, dropzone);
+    fileInput.value = "";
+  });
+
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("vault-dragover");
+  });
+
+  dropzone.addEventListener("dragleave", () => {
+    dropzone.classList.remove("vault-dragover");
+  });
+
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("vault-dragover");
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) uploadVaultFile(docType, file, resultEl, dropzone);
+  });
+});

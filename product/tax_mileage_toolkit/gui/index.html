@@ -31,6 +31,9 @@
       <button class="nav-item" data-view="clusters">
         <span class="nav-icon">◎</span> Cluster Explorer
       </button>
+      <button class="nav-item" data-view="vault">
+        <span class="nav-icon">🔒</span> Evidence Vault
+      </button>
     </nav>
   </aside>
 
@@ -205,6 +208,67 @@
               <div class="empty-state">Load clusters to view the map.</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-vault">
+        <div class="view-title">Evidence Vault</div>
+        <div class="card">
+          <div class="card-title">Local Document Ingestion</div>
+          <p class="vault-intro">
+            Drop documents below to extract key fields locally. Nothing is sent to any cloud service —
+            all processing happens in the local server process. Raw files land in <code>incoming/</code>;
+            structured JSON extracts go into <code>incoming/processed/</code>.
+          </p>
+        </div>
+
+        <div class="vault-grid">
+
+          <div class="vault-zone-card" id="vaultZoneW2">
+            <div class="vault-zone-header">
+              <span class="vault-zone-icon">📄</span>
+              <div>
+                <div class="vault-zone-title">W-2 Form</div>
+                <div class="vault-zone-hint">PDF · extracts wages, federal withholding, employer name</div>
+              </div>
+            </div>
+            <label class="vault-dropzone" id="dropzoneW2">
+              <input type="file" class="vault-file-input" id="fileW2" accept=".pdf" />
+              <span class="vault-drop-label">Drop W-2 PDF here or <u>click to browse</u></span>
+            </label>
+            <div class="vault-result" id="resultW2"></div>
+          </div>
+
+          <div class="vault-zone-card" id="vaultZoneBank">
+            <div class="vault-zone-header">
+              <span class="vault-zone-icon">🏦</span>
+              <div>
+                <div class="vault-zone-title">Bank Statement</div>
+                <div class="vault-zone-hint">CSV or PDF · extracts transaction count and date range</div>
+              </div>
+            </div>
+            <label class="vault-dropzone" id="dropzoneBank">
+              <input type="file" class="vault-file-input" id="fileBank" accept=".csv,.pdf" />
+              <span class="vault-drop-label">Drop bank statement here or <u>click to browse</u></span>
+            </label>
+            <div class="vault-result" id="resultBank"></div>
+          </div>
+
+          <div class="vault-zone-card" id="vaultZoneMaps">
+            <div class="vault-zone-header">
+              <span class="vault-zone-icon">📍</span>
+              <div>
+                <div class="vault-zone-title">Maps Timeline</div>
+                <div class="vault-zone-hint">Google Takeout JSON or screenshot PNG/JPG · extracts location records</div>
+              </div>
+            </div>
+            <label class="vault-dropzone" id="dropzoneMaps">
+              <input type="file" class="vault-file-input" id="fileMaps" accept=".json,.png,.jpg,.jpeg,.webp" />
+              <span class="vault-drop-label">Drop timeline file here or <u>click to browse</u></span>
+            </label>
+            <div class="vault-result" id="resultMaps"></div>
+          </div>
+
         </div>
       </section>
 

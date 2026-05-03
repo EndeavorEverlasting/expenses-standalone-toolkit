@@ -1085,3 +1085,238 @@ pre {
 .run-log-line.log-step {
   color: var(--accent);
 }
+
+/* ─── Evidence Vault ─────────────────────────────────────────────────────── */
+
+.vault-intro {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.vault-intro code {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 12px;
+  color: var(--text-code);
+}
+
+.vault-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.vault-zone-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vault-zone-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vault-zone-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.vault-zone-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.vault-zone-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.vault-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 14px;
+  text-align: center;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+
+.vault-dropzone:hover,
+.vault-dropzone.vault-dragover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.vault-dropzone.vault-uploading {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  opacity: .8;
+  pointer-events: none;
+}
+
+.vault-dropzone.vault-success {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+
+.vault-dropzone.vault-partial {
+  border-color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.vault-dropzone.vault-error {
+  border-color: var(--red);
+  background: var(--red-dim);
+}
+
+.vault-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.vault-drop-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+  user-select: none;
+}
+
+.vault-drop-label u {
+  color: var(--accent);
+}
+
+.vault-uploading-msg {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 4px 0;
+}
+
+.vault-extract-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--green);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vault-extract-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vault-extract-ok {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.vault-extract-partial {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.vault-extract-card-partial {
+  border-color: var(--amber);
+}
+
+.vault-extract-filename {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  word-break: break-all;
+}
+
+.vault-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vault-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.vault-field-key {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.vault-field-val {
+  color: var(--text-primary);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.vault-field-val.vault-money {
+  color: var(--green);
+  font-weight: 700;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.vault-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.vault-warning-item {
+  font-size: 11px;
+  color: var(--amber);
+}
+
+.vault-saved-path {
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  word-break: break-all;
+}
+
+.vault-saved-path code {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  color: var(--text-muted);
+}
+
+.vault-error-msg {
+  font-size: 12px;
+  color: var(--red);
+  padding: 4px 0;
+  word-break: break-word;
+}
