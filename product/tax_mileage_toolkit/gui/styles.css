@@ -885,3 +885,76 @@ pre {
 .grade-strong { background: var(--green-dim); color: var(--green); }
 .grade-near   { background: var(--accent-dim); color: var(--accent); }
 .grade-none   { background: var(--bg-overlay); color: var(--text-muted); }
+
+.run-log-wrap {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.run-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.run-log-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.run-log-toggle {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.run-log-body {
+  overflow: hidden;
+  transition: max-height .3s ease;
+  max-height: 280px;
+}
+
+.run-log-body.collapsed {
+  max-height: 0;
+}
+
+.run-log-lines {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.run-log-line {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.run-log-line.log-complete {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.run-log-line.log-error {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.run-log-line.log-step {
+  color: var(--accent);
+}

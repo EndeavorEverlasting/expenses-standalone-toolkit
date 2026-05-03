@@ -37,6 +37,9 @@ def create_app(workspace: Path) -> FastAPI:
     runs_root.mkdir(parents=True, exist_ok=True)
     _lock = threading.Lock()
     _run_state: dict[str, Any] = {"active": False, "last_run_id": ""}
+    _run_logs: dict[str, list[str]] = {}
+    _run_done: dict[str, bool] = {}
+    _run_error: dict[str, str | None] = {}
 
     app.mount("/static", StaticFiles(directory=gui_dir), name="static")
 
@@ -155,6 +158,62 @@ def create_app(workspace: Path) -> FastAPI:
             )
         return feedback
 
+    def _append_log(run_id: str, message: str) -> None:
+        ts = datetime.now().strftime("%H:%M:%S")
+        _run_logs[run_id].append(f"[{ts}] {message}")
+
+    def _execute_run(run_id: str, run_dir: Path, workbook_path: Path, payload: RunRequest) -> None:
+        try:
+            _append_log(run_id, f"Run {run_id} started.")
+            _append_log(run_id, "Step 1/4 — Auditing workbook…")
+            audit = run_audit(workbook_path, run_dir)
+            _append_log(run_id, "Audit complete.")
+
+            _append_log(run_id, "Step 2/4 — Reconciling cluster distances…")
+            reconcile = run_reconcile(workbook_path, run_dir)
+            _append_log(run_id, "Reconcile complete.")
+
+            _append_log(run_id, "Step 3/4 — Suggesting cluster matches…")
+            suggest = run_suggest_clusters(
+                workbook_path,
+                run_dir,
+                dry_run=not payload.write_suggestions,
+                engage_deferred=payload.engage_deferred,
+            )
+            suggested_count = suggest.get("suggested", 0) if isinstance(suggest, dict) else 0
+            _append_log(run_id, f"Suggestions complete — {suggested_count} suggestion(s) generated.")
+
+            _append_log(run_id, "Step 4/4 — Rendering HTML reports…")
+            html = render_html_reports(run_dir)
+            _append_log(run_id, "HTML reports ready.")
+
+            result = {
+                "run_id": run_id,
+                "run_dir": str(run_dir),
+                "audit": audit,
+                "reconcile": reconcile,
+                "suggest": suggest,
+                "html": html,
+            }
+            (run_dir / "run_result.json").write_text(json.dumps(result, default=str), encoding="utf-8")
+            _run_state["last_run_id"] = run_id
+            _append_log(run_id, "Run complete.")
+            _run_error[run_id] = None
+        except Exception as exc:
+            _append_log(run_id, f"Error: {exc}")
+            _run_error[run_id] = str(exc)
+        finally:
+            _run_done[run_id] = True
+            _run_state["active"] = False
+            _prune_run_logs(keep=20)
+
+    def _prune_run_logs(keep: int = 20) -> None:
+        keys = list(_run_logs.keys())
+        for old_key in keys[:-keep]:
+            _run_logs.pop(old_key, None)
+            _run_done.pop(old_key, None)
+            _run_error.pop(old_key, None)
+
     @app.get("/api/browse")
     def api_browse() -> dict[str, Any]:
         import subprocess
@@ -224,6 +283,21 @@ def create_app(workspace: Path) -> FastAPI:
             "suggestions": {"total": len(suggestions), "suggested": suggested, "deferred": deferred, "skipped": skipped},
             "matches_rows": len(matches),
             "overlaps_rows": len(overlaps),
+        }
+
+    @app.get("/api/runs/{run_id}/log")
+    def api_run_log(run_id: str, since: int = 0) -> dict[str, Any]:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", run_id or ""):
+            raise HTTPException(status_code=400, detail="Invalid run id.")
+        logs = _run_logs.get(run_id)
+        if logs is None:
+            raise HTTPException(status_code=404, detail="No log found for this run id.")
+        since = max(0, since)
+        return {
+            "lines": logs[since:],
+            "total": len(logs),
+            "done": _run_done.get(run_id, True),
+            "error": _run_error.get(run_id),
         }
 
     @app.get("/api/runs/{run_id}/cluster-stats")
@@ -297,20 +371,17 @@ def create_app(workspace: Path) -> FastAPI:
             run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             run_dir = runs_root / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                audit = run_audit(workbook_path, run_dir)
-                reconcile = run_reconcile(workbook_path, run_dir)
-                suggest = run_suggest_clusters(
-                    workbook_path,
-                    run_dir,
-                    dry_run=not payload.write_suggestions,
-                    engage_deferred=payload.engage_deferred,
-                )
-                html = render_html_reports(run_dir)
-                _run_state["last_run_id"] = run_id
-                return {"run_id": run_id, "run_dir": str(run_dir), "audit": audit, "reconcile": reconcile, "suggest": suggest, "html": html}
-            finally:
-                _run_state["active"] = False
+            _run_logs[run_id] = []
+            _run_done[run_id] = False
+            _run_error[run_id] = None
+
+        t = threading.Thread(
+            target=_execute_run,
+            args=(run_id, run_dir, workbook_path, payload),
+            daemon=True,
+        )
+        t.start()
+        return {"run_id": run_id, "status": "running"}
 
     @app.post("/api/promote")
     def api_promote(payload: PromoteRequest) -> dict[str, Any]:

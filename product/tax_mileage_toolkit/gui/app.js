@@ -1,5 +1,6 @@
 let activeRunId = null;
 let statusDismissTimer = null;
+let _logPollTimer = null;
 
 const statusBanner  = document.getElementById("statusBanner");
 const statusText    = document.getElementById("statusText");
@@ -12,6 +13,10 @@ const runsList      = document.getElementById("runsList");
 const suggestionsTable = document.getElementById("suggestionsTable");
 const genericTable  = document.getElementById("genericTable");
 const selectionCount = document.getElementById("selectionCount");
+const runLogWrap    = document.getElementById("runLogWrap");
+const runLogBody    = document.getElementById("runLogBody");
+const runLogLines   = document.getElementById("runLogLines");
+const runLogToggleBtn = document.getElementById("runLogToggleBtn");
 
 function setStatus(state, text) {
   clearTimeout(statusDismissTimer);
@@ -241,6 +246,66 @@ function renderSummary(data) {
   rawSummaryWrap.classList.remove("hidden");
 }
 
+runLogToggleBtn.addEventListener("click", () => {
+  const collapsed = runLogBody.classList.toggle("collapsed");
+  runLogToggleBtn.textContent = collapsed ? "Expand" : "Collapse";
+});
+
+function showRunLog() {
+  runLogLines.innerHTML = "";
+  runLogWrap.classList.remove("hidden");
+  runLogBody.classList.remove("collapsed");
+  runLogToggleBtn.textContent = "Collapse";
+}
+
+function appendLogLine(text) {
+  const div = document.createElement("div");
+  div.className = "run-log-line";
+  if (text.includes("complete") || text.includes("Run complete")) {
+    div.classList.add("log-complete");
+  } else if (text.toLowerCase().includes("error")) {
+    div.classList.add("log-error");
+  } else if (text.match(/Step \d+\/\d+/)) {
+    div.classList.add("log-step");
+  }
+  div.textContent = text;
+  runLogLines.appendChild(div);
+  runLogLines.scrollTop = runLogLines.scrollHeight;
+}
+
+function stopLogPolling() {
+  if (_logPollTimer !== null) {
+    clearTimeout(_logPollTimer);
+    _logPollTimer = null;
+  }
+}
+
+const LOG_POLL_MAX_FAILURES = 10;
+
+async function pollRunLog(runId, since, onDone, failureCount = 0) {
+  stopLogPolling();
+  try {
+    const data = await getJson(`/api/runs/${runId}/log?since=${since}`);
+    for (const line of data.lines) {
+      appendLogLine(line);
+    }
+    const nextSince = data.total;
+    if (data.done) {
+      onDone(data.error || null);
+    } else {
+      _logPollTimer = setTimeout(() => pollRunLog(runId, nextSince, onDone, 0), 400);
+    }
+  } catch (err) {
+    const next = failureCount + 1;
+    if (next >= LOG_POLL_MAX_FAILURES) {
+      appendLogLine("[error] Log stream unavailable — could not reach server.");
+      onDone("Log stream unavailable after repeated failures.");
+    } else {
+      _logPollTimer = setTimeout(() => pollRunLog(runId, since, onDone, next), 1000);
+    }
+  }
+}
+
 document.getElementById("browseBtn").addEventListener("click", async () => {
   const browseBtn = document.getElementById("browseBtn");
   browseBtn.disabled = true;
@@ -274,6 +339,8 @@ async function runIteration() {
   runBtn.disabled = true;
   runBtnIcon.textContent = "⏳";
   setStatus("running", "Running iteration…");
+  showRunLog();
+
   try {
     const payload = {
       workbook_path: workbookPath,
@@ -285,12 +352,27 @@ async function runIteration() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    setStatus("success", `Run complete: ${res.run_id}`);
-    await refreshRuns(true);
-    selectRunById(res.run_id);
-    await loadSummary(res.run_id);
-    navigateTo("history");
+
+    const runId = res.run_id;
+
+    await new Promise((resolve) => {
+      pollRunLog(runId, 0, (errorMsg) => {
+        resolve(errorMsg);
+      });
+    }).then(async (errorMsg) => {
+      stopLogPolling();
+      if (errorMsg) {
+        setStatus("error", `Run failed: ${errorMsg}`);
+        return;
+      }
+      setStatus("success", `Run complete: ${runId}`);
+      await refreshRuns(true);
+      selectRunById(runId);
+      await loadSummary(runId);
+      navigateTo("history");
+    });
   } catch (err) {
+    stopLogPolling();
     const message = err instanceof Error ? err.message : String(err);
     setStatus("error", `Run failed: ${message}`);
     console.error("runIteration failed", err);
