@@ -190,6 +190,47 @@ def create_app(workspace: Path) -> FastAPI:
             "overlaps_rows": len(overlaps),
         }
 
+    @app.get("/api/runs/{run_id}/cluster-stats")
+    def api_cluster_stats(run_id: str) -> dict[str, Any]:
+        run_dir = _get_run_dir(run_id)
+        matches = _read_csv(run_dir / "cluster_match_report.csv")
+        overlaps = _read_csv(run_dir / "cluster_overlap_report.csv")
+
+        total_clusters = len(matches)
+        total_distinct_days = 0
+        resolved_count = 0
+        unresolved_count = 0
+        for row in matches:
+            try:
+                total_distinct_days += int(row.get("distinct_days") or 0)
+            except (ValueError, TypeError):
+                pass
+            status = (row.get("review_status") or "").strip().lower()
+            if status and status not in ("unresolved", "pending", ""):
+                resolved_count += 1
+            else:
+                unresolved_count += 1
+
+        grade_counts: dict[str, int] = {"Strong": 0, "Near": 0, "unmatched": 0}
+        for row in matches:
+            grade = (row.get("auto_match_grade") or "").strip()
+            if grade == "Strong":
+                grade_counts["Strong"] += 1
+            elif grade == "Near":
+                grade_counts["Near"] += 1
+            else:
+                grade_counts["unmatched"] += 1
+
+        return {
+            "run_id": run_id,
+            "total_clusters": total_clusters,
+            "total_distinct_days": total_distinct_days,
+            "resolved_count": resolved_count,
+            "unresolved_count": unresolved_count,
+            "overlap_pairs": len(overlaps),
+            "grade_counts": grade_counts,
+        }
+
     @app.get("/api/runs/{run_id}/table/{name}")
     def api_table(run_id: str, name: str, q: str = "", limit: int = 500) -> dict[str, Any]:
         run_dir = _get_run_dir(run_id)

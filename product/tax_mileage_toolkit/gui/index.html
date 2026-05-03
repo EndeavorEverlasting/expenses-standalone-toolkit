@@ -27,6 +27,9 @@
       <button class="nav-item" data-view="tables">
         <span class="nav-icon">⊞</span> Data Tables
       </button>
+      <button class="nav-item" data-view="clusters">
+        <span class="nav-icon">◎</span> Cluster Explorer
+      </button>
     </nav>
   </aside>
 
@@ -123,6 +126,52 @@
           </div>
           <div id="genericTable" class="table-wrap">
             <div class="empty-state">Select a table to load.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-clusters">
+        <div class="view-title">Cluster Explorer</div>
+
+        <div class="card" id="clusterStatsCard">
+          <div class="card-title">Summary</div>
+          <div id="clusterSummaryBar" class="cluster-summary-bar">
+            <div class="empty-state">Select a run to load cluster data.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Visit Frequency Distribution</div>
+          <div class="cluster-histogram-wrap">
+            <canvas id="clusterHistogram" height="160"></canvas>
+            <div id="clusterHistogramEmpty" class="empty-state hidden">No cluster data to display.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">All Clusters</div>
+          <div class="table-toolbar cluster-filters">
+            <input id="clusterSearch" type="text" placeholder="Search label or site name…" class="max-w-search" />
+            <select id="clusterStatusFilter" class="filter-select">
+              <option value="">All statuses</option>
+              <option value="unresolved">Unresolved only</option>
+            </select>
+            <select id="clusterGradeFilter" class="filter-select">
+              <option value="">All grades</option>
+              <option value="Strong">Strong match</option>
+              <option value="Near">Near match</option>
+              <option value="unmatched">Unmatched</option>
+            </select>
+            <div class="days-range-group">
+              <input id="clusterMinDays" type="number" min="0" placeholder="Min days" class="days-input" />
+              <span class="range-sep">–</span>
+              <input id="clusterMaxDays" type="number" min="0" placeholder="Max days" class="days-input" />
+            </div>
+            <button id="clusterLoadBtn" class="btn btn-secondary">Load</button>
+            <span id="clusterRowCount" class="selection-count"></span>
+          </div>
+          <div id="clusterTable" class="table-wrap cluster-table-wrap">
+            <div class="empty-state">Load a run and click "Load" to explore clusters.</div>
           </div>
         </div>
       </section>

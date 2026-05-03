@@ -157,6 +157,17 @@ async function refreshRuns(preserveStatus = false) {
 }
 
 async function loadSummary(runId) {
+  if (activeRunId !== runId) {
+    _clusterAllRows = [];
+    _clusterSort = { col: "distinct_days", dir: "desc" };
+    document.getElementById("clusterSummaryBar").innerHTML = '<div class="empty-state">Select a run to load cluster data.</div>';
+    document.getElementById("clusterTable").innerHTML = '<div class="empty-state">Load a run and click "Load" to explore clusters.</div>';
+    document.getElementById("clusterRowCount").textContent = "";
+    const canvas = document.getElementById("clusterHistogram");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById("clusterHistogramEmpty").classList.remove("hidden");
+  }
   activeRunId = runId;
   const data = await getJson(`/api/runs/${runId}/summary`);
   renderSummary(data);
@@ -337,6 +348,347 @@ function errMsg(err) {
   return err instanceof Error ? err.message : String(err);
 }
 
+let _clusterAllRows = [];
+let _clusterSort = { col: "distinct_days", dir: "desc" };
+
+const CLUSTER_COLS = [
+  { key: "cluster_id",          label: "Cluster ID" },
+  { key: "user_site_label",     label: "Label" },
+  { key: "distinct_days",       label: "Days",          numeric: true },
+  { key: "total_hours",         label: "Hours",         numeric: true },
+  { key: "first_seen",          label: "First Seen" },
+  { key: "last_seen",           label: "Last Seen" },
+  { key: "review_status",       label: "Status" },
+  { key: "final_site_decision", label: "Final Decision" },
+  { key: "auto_match_grade",    label: "Grade" },
+  { key: "nearest_site",        label: "Nearest Site" },
+  { key: "distance_to_site_mi", label: "Dist (mi)",     numeric: true },
+];
+
+function resetClusterFilters() {
+  document.getElementById("clusterSearch").value = "";
+  document.getElementById("clusterStatusFilter").value = "";
+  document.getElementById("clusterGradeFilter").value = "";
+  document.getElementById("clusterMinDays").value = "";
+  document.getElementById("clusterMaxDays").value = "";
+}
+
+async function loadClusterExplorer() {
+  if (!activeRunId) {
+    setStatus("error", "No run selected. Load a run from Runs History first.");
+    return;
+  }
+  resetClusterFilters();
+  setStatus("running", "Loading cluster data…");
+  try {
+    const [statsData, tableData] = await Promise.all([
+      getJson(`/api/runs/${activeRunId}/cluster-stats`),
+      getJson(`/api/runs/${activeRunId}/table/matches?limit=5000`),
+    ]);
+    _clusterAllRows = tableData.rows || [];
+    renderClusterSummaryBar(statsData);
+    renderClusterHistogram(_clusterAllRows);
+    applyClusterFilters();
+    setStatus("success", `${_clusterAllRows.length} cluster${_clusterAllRows.length !== 1 ? "s" : ""} loaded`);
+  } catch (err) {
+    setStatus("error", `Failed to load clusters: ${errMsg(err)}`);
+  }
+}
+
+function renderClusterSummaryBar(stats) {
+  const bar = document.getElementById("clusterSummaryBar");
+  const { total_clusters, total_distinct_days, resolved_count, unresolved_count, overlap_pairs, grade_counts } = stats;
+  bar.innerHTML = `
+    <div class="cluster-stat-item">
+      <div class="cluster-stat-value accent">${total_clusters}</div>
+      <div class="cluster-stat-label">Clusters</div>
+      <div class="cluster-stat-sub">total locations</div>
+    </div>
+    <div class="cluster-stat-item">
+      <div class="cluster-stat-value">${total_distinct_days}</div>
+      <div class="cluster-stat-label">Visit-Days</div>
+      <div class="cluster-stat-sub">across all clusters</div>
+    </div>
+    <div class="cluster-stat-item">
+      <div class="cluster-stat-value green">${resolved_count}</div>
+      <div class="cluster-stat-label">Resolved</div>
+      <div class="cluster-stat-sub">have a status set</div>
+    </div>
+    <div class="cluster-stat-item">
+      <div class="cluster-stat-value amber">${unresolved_count}</div>
+      <div class="cluster-stat-label">Unresolved</div>
+      <div class="cluster-stat-sub">need attention</div>
+    </div>
+    <div class="cluster-stat-item">
+      <div class="cluster-stat-value ${overlap_pairs > 0 ? "red" : ""}">${overlap_pairs}</div>
+      <div class="cluster-stat-label">Overlaps</div>
+      <div class="cluster-stat-sub">cluster pairs &lt;0.5 mi</div>
+    </div>
+    <div class="cluster-summary-prose">
+      <strong>${total_clusters} clusters</strong> across <strong>${total_distinct_days} visit-days</strong>
+      &nbsp;·&nbsp; ${resolved_count} resolved, <strong>${unresolved_count} unresolved</strong>
+      &nbsp;·&nbsp; ${grade_counts.Strong} strong match · ${grade_counts.Near} near · ${grade_counts.unmatched} unmatched
+    </div>`;
+}
+
+function renderClusterHistogram(rows) {
+  const canvas = document.getElementById("clusterHistogram");
+  const emptyEl = document.getElementById("clusterHistogramEmpty");
+
+  const buckets = [
+    { label: "1 day",    min: 1,  max: 1  },
+    { label: "2–5 days", min: 2,  max: 5  },
+    { label: "6–20 days",min: 6,  max: 20 },
+    { label: "21+ days", min: 21, max: Infinity },
+  ];
+
+  const counts = buckets.map(() => 0);
+  rows.forEach(r => {
+    const d = parseInt(r.distinct_days, 10) || 0;
+    for (let i = 0; i < buckets.length; i++) {
+      if (d >= buckets[i].min && d <= buckets[i].max) { counts[i]++; break; }
+    }
+  });
+
+  if (rows.length === 0) {
+    canvas.classList.add("hidden");
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+  canvas.classList.remove("hidden");
+  emptyEl.classList.add("hidden");
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth || 600;
+  const H = 160;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  const maxCount = Math.max(...counts, 1);
+  const padL = 40, padR = 16, padT = 16, padB = 36;
+  const drawW = W - padL - padR;
+  const drawH = H - padT - padB;
+  const barGap = 12;
+  const barW = (drawW - barGap * (buckets.length - 1)) / buckets.length;
+
+  const accentColor = "#3b82f6";
+  const textColor   = "#8b95aa";
+  const gridColor   = "#252d42";
+
+  ctx.clearRect(0, 0, W, H);
+
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + drawH - (drawH * i / 4);
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + drawW, y);
+    ctx.stroke();
+    ctx.fillStyle = textColor;
+    ctx.font = "10px Inter, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(Math.round(maxCount * i / 4), padL - 5, y + 3.5);
+  }
+
+  buckets.forEach((b, i) => {
+    const x = padL + i * (barW + barGap);
+    const barH = counts[i] === 0 ? 0 : Math.max(3, (counts[i] / maxCount) * drawH);
+    const y = padT + drawH - barH;
+
+    ctx.fillStyle = accentColor;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+    } else {
+      ctx.rect(x, y, barW, barH);
+    }
+    ctx.fill();
+
+    ctx.fillStyle = textColor;
+    ctx.font = "10px Inter, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(b.label, x + barW / 2, H - padB + 14);
+
+    if (counts[i] > 0) {
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "bold 11px Inter, system-ui, sans-serif";
+      ctx.fillText(counts[i], x + barW / 2, y - 4);
+    }
+  });
+
+  canvas._bucketRanges = buckets.map((b, i) => ({
+    x: padL + i * (barW + barGap),
+    w: barW,
+    min: b.min,
+    max: b.max,
+  }));
+
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left);
+    for (const range of canvas._bucketRanges) {
+      if (mx >= range.x && mx <= range.x + range.w) {
+        document.getElementById("clusterMinDays").value = range.min === Infinity ? "" : range.min;
+        document.getElementById("clusterMaxDays").value = range.max === Infinity ? "" : range.max;
+        applyClusterFilters();
+        break;
+      }
+    }
+  };
+  canvas.style.cursor = "pointer";
+  canvas.title = "Click a bar to filter by that frequency range";
+}
+
+function applyClusterFilters() {
+  const search   = document.getElementById("clusterSearch").value.trim().toLowerCase();
+  const status   = document.getElementById("clusterStatusFilter").value;
+  const grade    = document.getElementById("clusterGradeFilter").value;
+  const minDays  = parseInt(document.getElementById("clusterMinDays").value, 10);
+  const maxDays  = parseInt(document.getElementById("clusterMaxDays").value, 10);
+
+  let filtered = _clusterAllRows.filter(r => {
+    if (search) {
+      const haystack = ((r.user_site_label || "") + " " + (r.nearest_site || "")).toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    if (status === "unresolved") {
+      const s = (r.review_status || "").trim().toLowerCase();
+      if (s && s !== "unresolved" && s !== "pending") return false;
+    }
+    if (grade) {
+      const g = (r.auto_match_grade || "").trim();
+      if (grade === "unmatched") { if (g) return false; }
+      else if (g !== grade) return false;
+    }
+    const days = parseInt(r.distinct_days, 10) || 0;
+    if (!isNaN(minDays) && days < minDays) return false;
+    if (!isNaN(maxDays) && days > maxDays) return false;
+    return true;
+  });
+
+  filtered = sortClusterRows(filtered);
+  renderClusterTable(filtered);
+}
+
+function sortClusterRows(rows) {
+  const { col, dir } = _clusterSort;
+  const colDef = CLUSTER_COLS.find(c => c.key === col);
+  const numeric = colDef ? colDef.numeric : false;
+  return [...rows].sort((a, b) => {
+    let av = a[col] ?? "";
+    let bv = b[col] ?? "";
+    if (numeric) {
+      av = parseFloat(av) || 0;
+      bv = parseFloat(bv) || 0;
+    } else {
+      av = String(av).toLowerCase();
+      bv = String(bv).toLowerCase();
+    }
+    if (av < bv) return dir === "asc" ? -1 : 1;
+    if (av > bv) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+}
+
+function gradeBadge(grade) {
+  if (grade === "Strong") return `<span class="grade-badge grade-strong">Strong</span>`;
+  if (grade === "Near")   return `<span class="grade-badge grade-near">Near</span>`;
+  return `<span class="grade-badge grade-none">${escapeHtml(grade) || "—"}</span>`;
+}
+
+function renderClusterTable(rows) {
+  const target = document.getElementById("clusterTable");
+  const rowCount = document.getElementById("clusterRowCount");
+  rowCount.textContent = rows.length > 0 ? `${rows.length} cluster${rows.length !== 1 ? "s" : ""}` : "";
+
+  if (!rows || rows.length === 0) {
+    target.innerHTML = '<div class="empty-state">No clusters match the current filters.</div>';
+    return;
+  }
+
+  const headCells = CLUSTER_COLS.map(c => {
+    const isActive = _clusterSort.col === c.key;
+    const indicator = isActive ? `<span class="sort-indicator">${_clusterSort.dir === "asc" ? "▲" : "▼"}</span>` : "";
+    return `<th data-col="${c.key}">${escapeHtml(c.label)}${indicator}</th>`;
+  }).join("");
+
+  const bodyRows = rows.map((r, idx) => {
+    const grade = (r.auto_match_grade || "").trim();
+    const cells = CLUSTER_COLS.map(c => {
+      if (c.key === "auto_match_grade") return `<td>${gradeBadge(grade)}</td>`;
+      return `<td>${escapeHtml(r[c.key] ?? "")}</td>`;
+    }).join("");
+    return `<tr class="cluster-row-expandable" data-idx="${idx}">${cells}</tr>`;
+  }).join("");
+
+  target.innerHTML = `
+    <table class="cluster-table">
+      <thead><tr>${headCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+
+  target.querySelectorAll("thead th[data-col]").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (_clusterSort.col === col) {
+        _clusterSort.dir = _clusterSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        _clusterSort.col = col;
+        _clusterSort.dir = "asc";
+      }
+      applyClusterFilters();
+    });
+  });
+
+
+  target.querySelectorAll(".cluster-row-expandable").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const idx = parseInt(tr.dataset.idx, 10);
+      const tbody = target.querySelector("tbody");
+      const existingDetail = tbody.querySelector(".cluster-detail-row");
+      if (existingDetail) {
+        const prevIdx = parseInt(existingDetail.dataset.forIdx, 10);
+        existingDetail.remove();
+        if (prevIdx === idx) { return; }
+      }
+      const row = rows[idx];
+      const numCols = CLUSTER_COLS.length;
+      const lat  = parseFloat(row.lat || "");
+      const lng  = parseFloat(row.lng || "");
+      const mapUrl = (!isNaN(lat) && !isNaN(lng))
+        ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+        : null;
+
+      const allFields = Object.entries(row).map(([k, v]) => `
+        <div class="cluster-detail-field">
+          <div class="cluster-detail-key">${escapeHtml(k)}</div>
+          <div class="cluster-detail-val">${escapeHtml(v ?? "")}</div>
+        </div>`).join("");
+
+      const mapBtn = mapUrl
+        ? `<a href="${mapUrl}" target="_blank" rel="noopener" class="cluster-map-link">📍 View on Google Maps</a>`
+        : "";
+
+      const detailRow = document.createElement("tr");
+      detailRow.className = "cluster-detail-row";
+      detailRow.dataset.forIdx = idx;
+      detailRow.innerHTML = `<td colspan="${numCols}">
+        <div class="cluster-detail-card">
+          <div class="cluster-detail-grid">${allFields}</div>
+          ${mapBtn}
+        </div>
+      </td>`;
+      tr.insertAdjacentElement("afterend", detailRow);
+    });
+  });
+}
+
 document.getElementById("refreshBtn").addEventListener("click", () => {
   refreshRuns().catch(err => setStatus("error", `Failed to refresh: ${errMsg(err)}`));
 });
@@ -348,6 +700,23 @@ document.getElementById("loadMatchesBtn").addEventListener("click", () => loadTa
 document.getElementById("loadOverlapsBtn").addEventListener("click", () => loadTable("overlaps"));
 document.getElementById("dryPromoteBtn").addEventListener("click", () => promote(true));
 document.getElementById("promoteBtn").addEventListener("click", () => promote(false));
+
+document.getElementById("clusterLoadBtn").addEventListener("click", loadClusterExplorer);
+
+document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
+  if (btn.dataset.view === "clusters") {
+    btn.addEventListener("click", () => {
+      if (activeRunId && _clusterAllRows.length === 0) {
+        loadClusterExplorer();
+      }
+    });
+  }
+});
+
+["clusterSearch", "clusterStatusFilter", "clusterGradeFilter", "clusterMinDays", "clusterMaxDays"].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", applyClusterFilters);
+});
 
 refreshRuns().catch(err => {
   setStatus("error", `Failed to load runs: ${errMsg(err)}`);

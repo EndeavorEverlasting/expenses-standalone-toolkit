@@ -657,3 +657,221 @@ pre {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.cluster-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.cluster-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 24px;
+  border-right: 1px solid var(--border);
+  min-width: 120px;
+}
+
+.cluster-stat-item:last-child {
+  border-right: none;
+}
+
+.cluster-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cluster-stat-value.accent { color: var(--accent); }
+.cluster-stat-value.green  { color: var(--green); }
+.cluster-stat-value.amber  { color: var(--amber); }
+.cluster-stat-value.red    { color: var(--red); }
+
+.cluster-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  text-align: center;
+}
+
+.cluster-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-align: center;
+}
+
+.cluster-summary-prose {
+  flex: 1;
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.cluster-histogram-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.cluster-histogram-wrap canvas {
+  width: 100% !important;
+  display: block;
+}
+
+.cluster-filters {
+  gap: 8px;
+}
+
+.filter-select {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+
+.filter-select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.days-range-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.days-input {
+  width: 80px !important;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.days-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.range-sep {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cluster-table-wrap {
+  max-height: 560px;
+}
+
+.cluster-table th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.cluster-table th:hover {
+  color: var(--text-primary);
+}
+
+.sort-indicator {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.cluster-row-expandable {
+  cursor: pointer;
+}
+
+.cluster-row-expandable:hover td {
+  color: var(--text-primary);
+}
+
+.cluster-detail-row td {
+  padding: 0 !important;
+  background: var(--bg-base) !important;
+}
+
+.cluster-detail-card {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.cluster-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 20px;
+  margin-bottom: 12px;
+}
+
+.cluster-detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cluster-detail-key {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+
+.cluster-detail-val {
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.cluster-detail-val.highlight {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cluster-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  transition: background .15s;
+}
+
+.cluster-map-link:hover {
+  background: var(--accent-dim);
+}
+
+.grade-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.grade-strong { background: var(--green-dim); color: var(--green); }
+.grade-near   { background: var(--accent-dim); color: var(--accent); }
+.grade-none   { background: var(--bg-overlay); color: var(--text-muted); }

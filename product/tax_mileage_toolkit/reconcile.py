@@ -59,6 +59,7 @@ def _load_clusters(ws: Any) -> list[dict[str, Any]]:
                     "lat": float(lat),
                     "lng": float(lng),
                     "total_hours": ws.cell(r, 14).value,
+                    "final_site_decision": ws.cell(r, 25).value,
                 }
             )
     return rows
@@ -102,10 +103,12 @@ def _export_cluster_matches(
         "user_site_label",
         "candidate_work_site",
         "distinct_days",
+        "total_hours",
         "first_seen",
         "last_seen",
         "lat",
         "lng",
+        "final_site_decision",
         "nearest_site",
         "distance_to_site_mi",
         "auto_match_grade",
@@ -147,10 +150,12 @@ def _export_cluster_matches(
                 "user_site_label": cluster["user_site_label"],
                 "candidate_work_site": cluster["candidate_work_site"],
                 "distinct_days": cluster["distinct_days"],
+                "total_hours": cluster.get("total_hours"),
                 "first_seen": cluster["first_seen"],
                 "last_seen": cluster["last_seen"],
                 "lat": cluster["lat"],
                 "lng": cluster["lng"],
+                "final_site_decision": cluster.get("final_site_decision"),
                 "nearest_site": nearest_site,
                 "distance_to_site_mi": distance_to_site_mi,
                 "auto_match_grade": grade,
