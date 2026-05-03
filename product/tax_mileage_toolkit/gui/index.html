@@ -7,54 +7,130 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Mileage GUI Workbench</h1>
-    <div id="status"></div>
-  </header>
+<div id="app">
 
-  <section class="card">
-    <h2>Run Controls</h2>
-    <div class="row">
-      <input id="workbookPath" type="text" placeholder="Workbook path" />
-      <label><input id="engageDeferred" type="checkbox" /> Engage deferred</label>
-      <label><input id="writeSuggestions" type="checkbox" /> Write helper suggestions</label>
-      <button id="runBtn">Run Iteration</button>
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <h1>Mileage Workbench</h1>
+      <p>Tax Mileage Toolkit</p>
     </div>
-  </section>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="run">
+        <span class="nav-icon">▶</span> Run Controls
+      </button>
+      <button class="nav-item" data-view="history">
+        <span class="nav-icon">🕒</span> Runs History
+      </button>
+      <button class="nav-item" data-view="suggestions">
+        <span class="nav-icon">✦</span> Suggestions
+      </button>
+      <button class="nav-item" data-view="tables">
+        <span class="nav-icon">⊞</span> Data Tables
+      </button>
+    </nav>
+  </aside>
 
-  <section class="card">
-    <h2>Runs</h2>
-    <div class="row">
-      <select id="runSelect"></select>
-      <button id="refreshBtn">Refresh</button>
+  <div id="main">
+
+    <div id="statusBanner" class="state-idle">
+      <span id="statusSpinner" class="spinner hidden"></span>
+      <span id="statusText"></span>
     </div>
-    <div id="summary"></div>
-    <details id="rawSummaryWrap" class="raw-summary">
-      <summary>Raw JSON summary</summary>
-      <pre id="rawSummary"></pre>
-    </details>
-  </section>
 
-  <section class="card">
-    <h2>Suggestions</h2>
-    <div class="row">
-      <input id="suggestQuery" type="text" placeholder="Search suggestions..." />
-      <button id="loadSuggestionsBtn">Load</button>
-      <button id="dryPromoteBtn">Promote Dry-Run Selected</button>
-      <button id="promoteBtn">Promote Selected</button>
+    <div id="content">
+
+      <section class="view active" id="view-run">
+        <div class="view-title">Run Controls</div>
+
+        <div class="card">
+          <div class="card-title">Workbook</div>
+          <div class="field-group">
+            <label class="field-label" for="workbookPath">Workbook Path</label>
+            <input id="workbookPath" type="text" placeholder="e.g. /home/user/mileage_2025.xlsx" />
+          </div>
+
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <input id="engageDeferred" type="checkbox" />
+              <span class="toggle-track"></span>
+              <span class="toggle-text">Engage deferred suggestions</span>
+            </label>
+            <label class="toggle-label">
+              <input id="writeSuggestions" type="checkbox" />
+              <span class="toggle-track"></span>
+              <span class="toggle-text">Write helper suggestions to workbook</span>
+            </label>
+          </div>
+
+          <div class="btn-row">
+            <button id="runBtn" class="btn btn-primary btn-lg">
+              <span id="runBtnIcon">▶</span> Run Iteration
+            </button>
+          </div>
+        </div>
+
+        <div id="feedbackArea"></div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="view-title">Runs History</div>
+
+        <div class="card">
+          <div class="card-title">All Runs</div>
+          <div class="btn-row mb-md">
+            <button id="refreshBtn" class="btn btn-secondary">⟳ Refresh</button>
+          </div>
+          <div id="runsList" class="runs-list">
+            <div class="empty-state">No runs loaded yet.</div>
+          </div>
+        </div>
+
+        <div id="summaryArea"></div>
+
+        <details id="rawSummaryWrap" class="raw-summary hidden">
+          <summary>Raw JSON summary</summary>
+          <pre id="rawSummary"></pre>
+        </details>
+      </section>
+
+      <section class="view" id="view-suggestions">
+        <div class="view-title">Suggestions</div>
+
+        <div class="card">
+          <div class="table-toolbar">
+            <input id="suggestQuery" type="text" placeholder="Search suggestions…" class="max-w-search" />
+            <button id="loadSuggestionsBtn" class="btn btn-secondary">Load</button>
+            <span id="selectionCount" class="selection-count"></span>
+          </div>
+          <div class="btn-row mb-sm">
+            <button id="dryPromoteBtn" class="btn btn-secondary">Dry-Run Promote Selected</button>
+            <button id="promoteBtn" class="btn btn-danger">Promote Selected</button>
+          </div>
+          <div id="suggestionsTable" class="table-wrap">
+            <div class="empty-state">Load suggestions to see results.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-tables">
+        <div class="view-title">Data Tables</div>
+
+        <div class="card">
+          <div class="card-title">Matches &amp; Overlaps</div>
+          <div class="btn-row mb-sm">
+            <button id="loadMatchesBtn" class="btn btn-secondary">Load Matches</button>
+            <button id="loadOverlapsBtn" class="btn btn-secondary">Load Overlaps</button>
+          </div>
+          <div id="genericTable" class="table-wrap">
+            <div class="empty-state">Select a table to load.</div>
+          </div>
+        </div>
+      </section>
+
     </div>
-    <div id="suggestionsTable"></div>
-  </section>
+  </div>
+</div>
 
-  <section class="card">
-    <h2>Matches / Overlaps</h2>
-    <div class="row">
-      <button id="loadMatchesBtn">Load Matches</button>
-      <button id="loadOverlapsBtn">Load Overlaps</button>
-    </div>
-    <div id="genericTable"></div>
-  </section>
-
-  <script src="/static/app.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>

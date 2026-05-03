@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
+import time
+import urllib.request
+import webbrowser
 from pathlib import Path
 
 MIN_PYTHON = (3, 10)
@@ -44,7 +48,22 @@ def bootstrap_environment(project_root: Path) -> Path:
     return venv_python
 
 
+def _open_browser_when_ready(url: str, timeout: int = 30) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1):
+                pass
+            webbrowser.open(url)
+            return
+        except Exception:
+            time.sleep(0.5)
+    print(f"Could not confirm server readiness; opening browser anyway: {url}")
+    webbrowser.open(url)
+
+
 def start_gui(venv_python: Path, host: str = "127.0.0.1", port: int = 8787) -> int:
+    url = f"http://{host}:{port}"
     cmd = [
         str(venv_python),
         "-m",
@@ -55,6 +74,8 @@ def start_gui(venv_python: Path, host: str = "127.0.0.1", port: int = 8787) -> i
         "--port",
         str(port),
     ]
+    t = threading.Thread(target=_open_browser_when_ready, args=(url,), daemon=True)
+    t.start()
     return subprocess.call(cmd, cwd=str(repo_root()))
 
 
