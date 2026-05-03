@@ -1021,6 +1021,42 @@ function renderClusterTable(rows) {
   });
 }
 
+function exportClusterCsv() {
+  const rows = sortClusterRows(getCurrentFilteredRows());
+  if (rows.length === 0) {
+    setStatus("error", "No cluster rows to export.");
+    return;
+  }
+  const escape = v => {
+    const s = String(v ?? "");
+    if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const headerRow = CLUSTER_COLS.map(c => escape(c.label)).join(",");
+  const lines = [
+    headerRow,
+    ...rows.map(r => CLUSTER_COLS.map(c => escape(r[c.key] ?? "")).join(",")),
+  ];
+  const csv = lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const runPart = activeRunId ? `_${activeRunId}` : "";
+  const filename = `clusters${runPart}_${ts}.csv`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus("success", `Exported ${rows.length} cluster${rows.length !== 1 ? "s" : ""} to ${filename}`);
+}
+
 document.getElementById("refreshBtn").addEventListener("click", () => {
   refreshRuns().catch(err => setStatus("error", `Failed to refresh: ${errMsg(err)}`));
 });
@@ -1034,6 +1070,7 @@ document.getElementById("dryPromoteBtn").addEventListener("click", () => promote
 document.getElementById("promoteBtn").addEventListener("click", () => promote(false));
 
 document.getElementById("clusterLoadBtn").addEventListener("click", loadClusterExplorer);
+document.getElementById("clusterExportBtn").addEventListener("click", exportClusterCsv);
 
 document.querySelectorAll(".cluster-tab-btn").forEach(btn => {
   btn.addEventListener("click", () => switchClusterTab(btn.dataset.tab));
