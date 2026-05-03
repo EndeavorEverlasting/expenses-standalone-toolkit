@@ -221,6 +221,16 @@ html, body {
   margin-bottom: 14px;
 }
 
+.browse-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.browse-input-row input[type="text"] {
+  flex: 1;
+}
+
 .field-label {
   font-size: 12px;
   font-weight: 600;

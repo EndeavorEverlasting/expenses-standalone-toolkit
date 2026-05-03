@@ -62,6 +62,22 @@ def _open_browser_when_ready(url: str, timeout: int = 30) -> None:
     webbrowser.open(url)
 
 
+def check_tkinter(venv_python: Path) -> None:
+    result = subprocess.run(
+        [str(venv_python), "-c", "import tkinter"],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        print(
+            "Warning: tkinter is not available in this Python environment.\n"
+            "The 'Browse…' file picker button in the GUI requires tkinter.\n"
+            "On Debian/Ubuntu Linux, install it with: sudo apt install python3-tk\n"
+            "On Fedora/RHEL: sudo dnf install python3-tkinter\n"
+            "On macOS and Windows tkinter is typically bundled with Python.\n"
+            "You can still type a workbook path manually without it.\n"
+        )
+
+
 def start_gui(venv_python: Path, host: str = "127.0.0.1", port: int = 8787) -> int:
     url = f"http://{host}:{port}"
     cmd = [
@@ -88,6 +104,7 @@ def main() -> int:
         print("Run from repository root and verify Python is installed and available in PATH.")
         return 1
 
+    check_tkinter(venv_python)
     print("Starting Mileage GUI Workbench at http://127.0.0.1:8787 ...")
     return start_gui(venv_python)
 

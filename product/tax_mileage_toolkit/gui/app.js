@@ -241,6 +241,28 @@ function renderSummary(data) {
   rawSummaryWrap.classList.remove("hidden");
 }
 
+document.getElementById("browseBtn").addEventListener("click", async () => {
+  const browseBtn = document.getElementById("browseBtn");
+  browseBtn.disabled = true;
+  try {
+    const res = await fetch("/api/browse");
+    if (!res.ok) {
+      let detail = `${res.status} error`;
+      try { detail = (await res.json()).detail || detail; } catch (_) { detail = await res.text() || detail; }
+      setStatus("error", `File browser failed: ${detail}`);
+      return;
+    }
+    const data = await res.json();
+    if (data.path) {
+      document.getElementById("workbookPath").value = data.path;
+    }
+  } catch (err) {
+    setStatus("error", `File browser failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    browseBtn.disabled = false;
+  }
+});
+
 async function runIteration() {
   const workbookPath = document.getElementById("workbookPath").value.trim();
   if (!workbookPath) {

@@ -155,6 +155,42 @@ def create_app(workspace: Path) -> FastAPI:
             )
         return feedback
 
+    @app.get("/api/browse")
+    def api_browse() -> dict[str, Any]:
+        import subprocess
+        import sys
+
+        _dialog_script = (
+            "import sys, tkinter as tk; from tkinter import filedialog; "
+            "initialdir = sys.argv[1] if len(sys.argv) > 1 else '.'; "
+            "root = tk.Tk(); root.withdraw(); root.wm_attributes('-topmost', True); "
+            "path = filedialog.askopenfilename("
+            "title='Select Workbook', "
+            "initialdir=initialdir, "
+            "filetypes=[('Excel files', '*.xlsx *.xls')]"
+            "); root.destroy(); print(path or '', end='')"
+        )
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", _dialog_script, str(workspace)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                err = result.stderr.strip() or "unknown error"
+                raise HTTPException(status_code=500, detail=f"File dialog failed: {err}")
+            selected = result.stdout.strip()
+            if selected and not selected.lower().endswith((".xlsx", ".xls")):
+                raise HTTPException(status_code=400, detail="Selected file must be an .xlsx or .xls workbook.")
+            return {"path": selected}
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=408, detail="File dialog timed out.")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"File dialog failed: {exc}")
+
     @app.get("/")
     def root() -> FileResponse:
         return FileResponse(gui_dir / "index.html")
