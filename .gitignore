@@ -4,6 +4,10 @@ Shitty Google Docs/
 bank statements/
 screenshots/raw/
 incoming/raw/
+incoming/w2/
+incoming/bank/
+incoming/maps/
+incoming/processed/
 latest/*.xlsx
 latest/*.zip
 
