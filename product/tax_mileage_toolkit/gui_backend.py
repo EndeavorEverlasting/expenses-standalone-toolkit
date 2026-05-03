@@ -284,7 +284,7 @@ def create_app(workspace: Path) -> FastAPI:
     return app
 
 
-def serve_gui(host: str = "127.0.0.1", port: int = 8787, workspace: Path | None = None) -> None:
+def serve_gui(host: str = "0.0.0.0", port: int = 5000, workspace: Path | None = None) -> None:
     root = workspace.expanduser().resolve() if workspace else Path(__file__).resolve().parents[2]
     app = create_app(root)
     uvicorn.run(app, host=host, port=port)
