@@ -320,6 +320,7 @@ document.getElementById("browseBtn").addEventListener("click", async () => {
     const data = await res.json();
     if (data.path) {
       document.getElementById("workbookPath").value = data.path;
+      localStorage.setItem("workbookPath", data.path);
     }
   } catch (err) {
     setStatus("error", `File browser failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -820,6 +821,28 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
 ["clusterSearch", "clusterStatusFilter", "clusterGradeFilter", "clusterMinDays", "clusterMaxDays"].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("input", applyClusterFilters);
+});
+
+const workbookPathInput = document.getElementById("workbookPath");
+const savedWorkbookPath = localStorage.getItem("workbookPath");
+if (savedWorkbookPath) {
+  workbookPathInput.value = savedWorkbookPath;
+}
+workbookPathInput.addEventListener("input", () => {
+  const val = workbookPathInput.value.trim();
+  if (val) {
+    localStorage.setItem("workbookPath", val);
+  } else {
+    localStorage.removeItem("workbookPath");
+  }
+});
+workbookPathInput.addEventListener("blur", () => {
+  const val = workbookPathInput.value.trim();
+  if (val) {
+    localStorage.setItem("workbookPath", val);
+  } else {
+    localStorage.removeItem("workbookPath");
+  }
 });
 
 refreshRuns().catch(err => {
